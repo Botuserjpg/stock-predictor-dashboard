@@ -2,6 +2,7 @@ services:
   - type: web
     name: stock-predictor-dashboard
     runtime: docker
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: FLASK_ENV
