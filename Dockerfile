@@ -36,6 +36,9 @@ COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /app
 COPY . .
+# Runtime caches and the local SQLite state are intentionally git-ignored, but
+# must be creatable by the unprivileged process at startup.
+RUN chown -R appuser:appuser /app
 
 USER appuser
 EXPOSE 5000
