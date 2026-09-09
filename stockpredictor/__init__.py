@@ -28,11 +28,13 @@ def create_app(test_config: Optional[Dict[str, Any]] = None) -> Flask:
     if test_config:
         app.config.update(test_config)
 
-    logger = app.logger
-    if not logger.handlers:
-        from production_core import configure_logging
+    # Flask installs a default handler before the factory runs, so testing
+    # ``app.logger.handlers`` here skipped our console logger in production.
+    # Configure the project logger unconditionally so SMTP and audit failures
+    # are visible to the platform log stream.
+    from production_core import configure_logging
 
-        logger = configure_logging()
+    configure_logging()
 
     init_extensions(app)
     register_blueprints(app)
