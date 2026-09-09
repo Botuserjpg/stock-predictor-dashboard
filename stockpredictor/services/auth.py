@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from production_core import audit_log, load_app_state, save_app_state
 
@@ -102,23 +102,27 @@ class UserStore:
         if expired:
             self.persist()
 
-    def start_otp_registration(self, email: str, password: str) -> Optional[str]:
+    def start_otp_registration(
+        self, email: str, password: str
+    ) -> Tuple[Optional[str], Optional[str]]:
         """Validate credentials and stash a pending signup with a fresh OTP.
 
-        Returns an error message, or None on success (callers read the code
-        from :attr:`pending_registrations` to deliver it).
+        Returns ``(error, otp)``: on success ``error`` is None and ``otp`` is
+        the plaintext code to deliver to the user (e.g. via email). On failure
+        ``error`` holds the message and ``otp`` is None.
         """
         email = (email or "").strip().lower()
         if not email or not password:
-            return "Please fill in all fields"
+            return "Please fill in all fields", None
         if not EMAIL_PATTERN.match(email):
-            return "Please enter a valid email address"
+            return "Please enter a valid email address", None
         if email in self.users:
-            return "Email already registered. Please login instead."
+            return "Email already registered. Please login instead.", None
         valid, password_error = validate_password_strength(password)
         if not valid:
-            return password_error
+            return password_error, None
 
+        otp = _generate_otp()
         self.pending_registrations[email] = {
             "otp": "",
             "expires": (
@@ -127,9 +131,9 @@ class UserStore:
             "password": hash_password(password),
             "attempts": 0,
         }
-        self._store_otp(email, _generate_otp())
+        self._store_otp(email, otp)
         self.persist()
-        return None
+        return None, otp
 
     def pending_otp(self, email: str) -> Optional[str]:
         """Return the current OTP for a pending signup (None when absent)."""

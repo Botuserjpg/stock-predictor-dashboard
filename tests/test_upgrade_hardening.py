@@ -237,7 +237,8 @@ class OtpHashingTests(unittest.TestCase):
     def test_otp_hashed_when_smtp_configured(self):
         email = "hashedotp@example.com"
         with mock.patch("stockpredictor.services.mail.smtp_configured", return_value=True):
-            self.assertIsNone(user_store.start_otp_registration(email, VALID_PASSWORD))
+            error, _ = user_store.start_otp_registration(email, VALID_PASSWORD)
+            self.assertIsNone(error)
             otp = user_store.resend_otp(email)
             stored = user_store.pending_otp(email)
             self.assertIsNotNone(otp)
@@ -250,7 +251,8 @@ class OtpHashingTests(unittest.TestCase):
 
     def test_demo_mode_keeps_displayable_plaintext(self):
         email = "plainotp@example.com"
-        self.assertIsNone(user_store.start_otp_registration(email, VALID_PASSWORD))
+        error, _ = user_store.start_otp_registration(email, VALID_PASSWORD)
+        self.assertIsNone(error)
         otp = user_store.resend_otp(email)
         stored = user_store.pending_otp(email)
         self.assertEqual(stored, otp)  # demo UI shows the code; no SMTP to deliver it
@@ -274,11 +276,9 @@ class AuditEventTests(unittest.TestCase):
         """Create the account via the service layer (no template coupling),
         then make sure no session is logged in before exercising login."""
         self.client.get("/logout")
-        error = user_store.start_otp_registration(email, VALID_PASSWORD)
+        error, otp = user_store.start_otp_registration(email, VALID_PASSWORD)
         self.assertIsNone(error)
-        error = user_store.complete_otp_registration(
-            email, user_store.pending_otp(email)
-        )
+        error = user_store.complete_otp_registration(email, otp)
         self.assertIsNone(error)
 
     def test_login_failure_logout_and_lockout_are_audited(self):
@@ -329,11 +329,10 @@ class ConcurrentRegistrationTests(unittest.TestCase):
 
         def worker(email):
             try:
-                error = user_store.start_otp_registration(email, VALID_PASSWORD)
+                error, otp = user_store.start_otp_registration(email, VALID_PASSWORD)
                 if error:
                     errors.append((email, error))
                     return
-                otp = user_store.pending_otp(email)
                 error = user_store.complete_otp_registration(email, otp)
                 if error:
                     errors.append((email, error))

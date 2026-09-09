@@ -30,10 +30,9 @@ def register():
         if password != confirm:
             error = "Passwords do not match"
         else:
-            error = user_store.start_otp_registration(email, password)
+            error, otp = user_store.start_otp_registration(email, password)
             if error is None:
                 email = email.strip().lower()
-                otp = user_store.pending_otp(email)
                 audit_log("user.otp_sent", email, {"email": email})
                 if not send_otp_email(email, otp):
                     user_store.cancel_otp_registration(email)
