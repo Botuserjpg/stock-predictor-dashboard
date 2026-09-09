@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Audit Log — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>🧾 Audit Log</h1>
+    <span class="pill pill-blue">{{ events.total }} entries</span>
+</div>
+<p class="subtitle">Security and operational event trail</p>
+
+<section class="card">
+    <form method="GET" class="inline-form" style="margin-bottom: 18px;">
+        <select name="event">
+            <option value="">All events</option>
+            {% for event in event_options %}
+                <option value="{{ event }}" {{ 'selected' if event == selected_event else '' }}>{{ event }}</option>
+            {% endfor %}
+        </select>
+        <input type="email" name="user" placeholder="Filter by user email" value="{{ user_filter }}">
+        <button type="submit" class="btn btn-outline">Apply</button>
+    </form>
+
+    {% if events.entries %}
+        <div class="table-wrap">
+            <table class="stock-table">
+                <thead>
+                    <tr><th>Timestamp</th><th>Event</th><th>User</th><th>IP</th><th>Request</th><th>Metadata</th></tr>
+                </thead>
+                <tbody>
+                    {% for entry in events.entries %}
+                        <tr>
+                            <td class="mono">{{ entry.timestamp.replace('T', ' ') }}</td>
+                            <td class="mono">{{ entry.event }}</td>
+                            <td>{{ entry.user_id or '—' }}</td>
+                            <td class="mono">{{ entry.ip or '—' }}</td>
+                            <td class="mono">{{ entry.request_id or '—' }}</td>
+                            <td class="mono"><details><summary>meta</summary><pre>{{ entry.metadata | tojson }}</pre></details></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination">
+            {% if events.page > 1 %}
+                <a class="btn btn-outline btn-sm"
+                   href="{{ url_for('admin.audit', page=events.page - 1, event=selected_event, user=user_filter) }}">← Prev</a>
+            {% endif %}
+            <span class="muted">Page {{ events.page }} of {{ events.pages }}</span>
+            {% if events.page < events.pages %}
+                <a class="btn btn-outline btn-sm"
+                   href="{{ url_for('admin.audit', page=events.page + 1, event=selected_event, user=user_filter) }}">Next →</a>
+            {% endif %}
+        </div>
+    {% else %}
+        <p class="muted">No audit entries match the current filter.</p>
+    {% endif %}
+</section>
+{% endblock %}

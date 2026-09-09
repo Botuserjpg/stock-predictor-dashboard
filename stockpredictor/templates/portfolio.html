@@ -1,0 +1,427 @@
+{% extends "base.html" %}
+{% block title %}Portfolio — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>💼 Your Paper Portfolio</h1>
+    <span class="pill pill-green">${{ "%.2f" | format(total) }}</span>
+</div>
+<p class="subtitle">Simulate trades with $10,000 virtual cash — live prices, no risk</p>
+
+<div class="grid stats-grid">
+    <div class="metric-card">
+        <div class="metric-label">Total Value</div>
+        <div class="metric-value">${{ "%.2f" | format(total) }}</div>
+        <div class="metric-sub">Cash + positions</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Cash</div>
+        <div class="metric-value">${{ "%.2f" | format(cash) }}</div>
+        <div class="metric-sub">Available to trade</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Invested</div>
+        <div class="metric-value">${{ "%.2f" | format(invested) }}</div>
+        <div class="metric-sub">Cost basis of holdings</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Unrealized P&amp;L</div>
+        <div class="metric-value {{ 'trend-up' if unrealized_pnl >= 0 else 'trend-down' }}">
+            {{ '▲' if unrealized_pnl >= 0 else '▼' }} ${{ "%.2f" | format(unrealized_pnl | abs) }}
+            ({{ "%+.2f" | format(unrealized_pct) }}%)
+        </div>
+        <div class="metric-sub">Open positions at live prices</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Total P&amp;L</div>
+        <div class="metric-value {{ 'trend-up' if total_return >= 0 else 'trend-down' }}">
+            {{ '▲' if total_return >= 0 else '▼' }} ${{ "%.2f" | format(total_return | abs) }}
+            ({{ "%+.2f" | format(total_return_pct) }}%)
+        </div>
+        <div class="metric-sub">vs. net contributions</div>
+    </div>
+</div>
+
+{% if insights %}
+<section class="card">
+    <div class="card-header">
+        <h2>🤖 AI Insights</h2>
+        <span class="pill pill-blue">Signal-weighted score</span>
+    </div>
+
+    {% if sell_signals %}
+        <div class="alert-banner sell-alert">
+            <span class="sell-alert-icon">⚠️</span>
+            <div>
+                <strong>Price-drop risk detected — consider selling</strong>
+                <ul>
+                    {% for s in sell_signals %}
+                        <li>
+                            <strong>{{ s.symbol }}</strong> — {{ s.signal }}
+                            (score {{ s.score }}): {{ s.reasons|join(', ') if s.reasons else 'Bearish setup' }}
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="grid insight-grid">
+        {% for ins in insights %}
+            <div class="insight-card">
+                <div class="insight-head">
+                    <strong>{{ ins.symbol }}</strong>
+                    <span class="pill {{ ins.pill }}">{{ ins.signal }}</span>
+                </div>
+                <div class="insight-score">Composite score <strong>{{ ins.score }}/100</strong></div>
+                <div class="mini-bar insight-bar">
+                    <div class="mini-fill" style="width: {{ ins.score }}%; background: {{ 'var(--up)' if ins.score >= 60 else ('var(--gold)' if ins.score >= 45 else 'var(--down)') }};"></div>
+                </div>
+                <ul class="reason-list">
+                    {% for reason in ins.reasons %}<li>{{ reason }}</li>{% endfor %}
+                    {% if not ins.reasons %}<li class="muted">No strong signal yet</li>{% endif %}
+                </ul>
+                <div class="insight-hint {{ 'trend-up' if ins.signal in ('BUY', 'STRONG_BUY') else ('trend-down' if ins.signal in ('SELL', 'STRONG_SELL') else 'muted') }}">
+                    {{ ins.hint }}
+                </div>
+                <div class="insight-guide">
+                    <span>Stop-loss ≈ ${{ "%.2f" | format(ins.stop_loss) }}</span>
+                    <span>Target ≈ ${{ "%.2f" | format(ins.take_profit) }}</span>
+                </div>
+                {% if loop.index == 1 %}
+                    <div class="top-pick-badge">★ Most profitable outlook</div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<div class="grid two-col">
+    <section class="card">
+        <h2>Trade</h2>
+        <div class="form-group">
+            <label for="tradeSymbol">Symbol</label>
+            <input type="text" id="tradeSymbol" placeholder="AAPL" autocapitalize="characters" spellcheck="false">
+        </div>
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="tradeQty">Quantity</label>
+                <input type="number" id="tradeQty" value="1" min="0" step="any">
+            </div>
+            <div class="form-group">
+                <label for="tradePrice">Price (optional)</label>
+                <input type="number" id="tradePrice" placeholder="Auto-fetch" min="0" step="any">
+            </div>
+        </div>
+        <div class="inline-form">
+            <button type="button" class="btn btn-success" onclick="trade('BUY')">Buy</button>
+            <button type="button" class="btn btn-danger" onclick="trade('SELL')">Sell</button>
+        </div>
+        <p class="field-hint">Leave price blank to use the live market price. A 0.1% fee is applied per trade.</p>
+    </section>
+
+    <section class="card">
+        <h2>Cash Management</h2>
+        <div class="inline-form">
+            <input type="number" id="cashAmount" placeholder="Amount $" min="0" step="any">
+            <button type="button" class="btn btn-secondary" onclick="cashMove('deposit')">Deposit</button>
+            <button type="button" class="btn btn-outline" onclick="cashMove('withdraw')">Withdraw</button>
+        </div>
+        <p class="field-hint">Adjust virtual cash to size your paper-trading experiments.</p>
+    </section>
+</div>
+
+<section class="card">
+    <div class="card-header">
+        <h2>📊 Holdings</h2>
+        <span class="pill {{ 'pill-green' if rows else 'pill-neutral' }}">{{ rows|length }} positions</span>
+    </div>
+    {% if rows %}
+        <div class="table-wrap">
+            <table class="stock-table">
+                <thead>
+                    <tr>
+                        <th>Symbol</th><th>Quantity</th><th>Avg Price</th><th>Live Price</th>
+                        <th>Trend</th><th>Value</th><th>Unrealized</th><th>Allocation</th><th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        <tr>
+                            <td><a href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ row.symbol }}">{{ row.symbol }} ⚡</a></td>
+                            <td class="mono">{{ row.quantity }}</td>
+                            <td class="mono">${{ row.avg_price }}</td>
+                            <td class="mono">{{ "$%.2f" | format(row.price) if row.price else '—' }}</td>
+                            <td>
+                                {% if row.closes and row.closes|length >= 2 %}
+                                    <div class="sparkline-cell" data-sparkline="{{ row.closes | tojson }}"></div>
+                                {% else %}
+                                    <span class="muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="mono">${{ "%.2f" | format(row.value) }}</td>
+                            <td class="{{ 'trend-up' if row.unrealized and row.unrealized >= 0 else 'trend-down' }}">
+                                {% if row.unrealized is not none %}
+                                    {{ '▲' if row.unrealized >= 0 else '▼' }} ${{ "%.2f" | format(row.unrealized | abs) }}
+                                    ({{ "%+.2f" | format(row.unrealized_pct) }}%)
+                                {% else %}<span class="muted">—</span>{% endif %}
+                            </td>
+                            <td>
+                                <div class="mini-bar" title="{{ row.weight }}%">
+                                    <div class="mini-fill" style="width: {{ row.weight }}%;"></div>
+                                </div>
+                                <span class="muted">{{ row.weight }}%</span>
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-outline btn-sm" onclick="quickTrade('{{ row.symbol }}')">Trade</button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="muted">No positions yet. Buy your first stock above to get started.</p>
+    {% endif %}
+</section>
+
+{% if rows %}
+<section class="card">
+    <div class="card-header">
+        <h2>📊 Allocation &amp; Performance</h2>
+        <span class="pill pill-neutral">Live prices</span>
+    </div>
+    <div class="grid two-col">
+        <div class="chart-card">
+            <h3>Allocation</h3>
+            <div class="chart-wrap" id="allocationChart" data-slices="{{ allocation | tojson }}"></div>
+        </div>
+        <div class="chart-card">
+            <h3>Unrealized P&amp;L by Position</h3>
+            <div class="chart-wrap" id="positionPnlChart" data-rows="{{ pnl_rows | tojson }}"></div>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+{% if equity %}
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">📈</span> Equity Curve</h2>
+        <span class="pill pill-blue">{{ equity|length }} points</span>
+    </div>
+    <div class="chart-wrap" id="equityChart" data-rows="{{ equity | tojson }}"></div>
+    <div class="equity-note">
+        <span class="chip">Reconstructed from your trade history</span>
+        <span class="chip {{ 'trend-up' if equity[-1].value >= equity[0].value else 'trend-down' }}">
+            {{ '▲' if equity[-1].value >= equity[0].value else '▼' }}
+            {{ "%+.2f" | format(equity[-1].value - equity[0].value) }}
+        </span>
+    </div>
+</section>
+{% endif %}
+
+{% if risk and risk.get('success', True) %}
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">🛡️</span> Portfolio Risk Engine</h2>
+        <span class="pill pill-blue">VaR · correlation · sizing</span>
+    </div>
+
+    {% set var = risk.get('var') %}
+    {% if var %}
+        <div class="grid">
+            <div class="metric-card">
+                <div class="metric-label">VaR (95%, 1 day)</div>
+                <div class="metric-value trend-down">{{ "%.2f" | format(var.get('historical_var_1d', 0)) }}%</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Parametric VaR</div>
+                <div class="metric-value trend-down">{{ "%.2f" | format(var.get('parametric_var_1d', 0)) }}%</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">VaR (95%, 5 day)</div>
+                <div class="metric-value trend-down">{{ "%.2f" | format(var.get('var_95_5d', 0)) }}%</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Expected 1d Return</div>
+                <div class="metric-value {{ 'trend-up' if var.get('expected_return_1d', 0) >= 0 else 'trend-down' }}">
+                    {{ "%.2f" | format(var.get('expected_return_1d', 0)) }}%
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Portfolio Vol (1d)</div>
+                <div class="metric-value">{{ "%.2f" | format(var.get('volatility_1d', 0)) }}%</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Confidence</div>
+                <div class="metric-value">{{ "%.0f" | format((var.get('confidence') or 0.95) * 100) }}%</div>
+            </div>
+        </div>
+    {% endif %}
+
+    {% set corr = risk.get('correlation') %}
+    {% if corr %}
+        <h3 style="margin:18px 0 10px;">Correlation Matrix</h3>
+        <div class="table-wrap">
+            <table class="stock-table">
+                <thead><tr><th></th>{% for s in corr.symbols %}<th>{{ s }}</th>{% endfor %}</tr></thead>
+                <tbody>
+                    {% for row in corr.matrix %}
+                        <tr>
+                            <th>{{ corr.symbols[loop.index0] }}</th>
+                            {% for value in row %}
+                                <td class="mono {{ 'trend-up' if value > 0.3 else ('trend-down' if value < -0.3 else '') }}">{{ "%.2f" | format(value) }}</td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+    {% if risk.get('sizing') %}
+        <h3 style="margin:18px 0 10px;">Volatility-Target Position Sizing <span class="muted">(15% target annual vol, max 25% of cash)</span></h3>
+        <div class="table-wrap">
+            <table class="stock-table">
+                <thead><tr><th>Symbol</th><th>Annual Vol</th><th>Suggested Shares</th><th>Position Value</th><th>% of Cash</th></tr></thead>
+                <tbody>
+                    {% for size in risk.get('sizing') %}
+                        <tr>
+                            <td><strong>{{ size.symbol }}</strong></td>
+                            <td class="mono">{{ "%.1f" | format(size.annual_vol_pct) }}%</td>
+                            <td class="mono">{{ size.shares }}</td>
+                            <td class="mono">${{ "%.2f" | format(size.position_value) }}</td>
+                            <td class="mono">{{ "%.1f" | format(size.allocation_pct) }}%</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+    {% if risk.get('rebalance') %}
+        <h3 style="margin:18px 0 10px;">Rebalance Suggestions <span class="muted">(towards equal weight)</span></h3>
+        <div class="table-wrap">
+            <table class="stock-table">
+                <thead><tr><th>Symbol</th><th>Current</th><th>Target</th><th>Action</th></tr></thead>
+                <tbody>
+                    {% for rec in risk.get('rebalance') %}
+                        <tr>
+                            <td><strong>{{ rec.symbol }}</strong></td>
+                            <td class="mono">{{ "%.1f" | format(rec.current_pct) }}%</td>
+                            <td class="mono">{{ "%.1f" | format(rec.target_pct) }}%</td>
+                            <td><span class="pill {{ 'pill-green' if rec.action == 'BUY' else 'pill-red' }}">{{ rec.action }}</span></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+    <p class="field-hint muted">Risk figures are estimates from recent price history, not financial advice.</p>
+</section>
+{% endif %}
+
+{% if history %}
+<section class="card">
+    <div class="card-header">
+        <h2>🧾 Transaction History</h2>
+        <span class="pill pill-neutral">{{ history|length }} recent</span>
+    </div>
+    <div class="table-wrap">
+        <table class="stock-table">
+            <thead><tr><th>Date</th><th>Type</th><th>Symbol</th><th>Quantity</th><th>Price</th></tr></thead>
+            <tbody>
+                {% for entry in history %}
+                    <tr>
+                        <td class="muted">{{ entry.date }}</td>
+                        <td>
+                            <span class="pill {{ 'pill-green' if entry.type == 'BUY' or entry.type == 'DEPOSIT' else ('pill-red' if entry.type == 'SELL' or entry.type == 'WITHDRAW' else 'pill-neutral') }}">
+                                {{ entry.type }}
+                            </span>
+                        </td>
+                        <td>{{ entry.symbol }}</td>
+                        <td class="mono">{{ entry.quantity if entry.quantity is not none else '—' }}</td>
+                        <td class="mono">${{ entry.price }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+<section class="card">
+    <div class="card-header">
+        <h2>📤 Export &amp; Optimize</h2>
+    </div>
+    <div class="inline-form">
+        <a class="btn btn-outline" href="{{ url_for('api.api_portfolio_export') }}">Export as JSON</a>
+        <a class="btn btn-outline" href="{{ url_for('api.api_portfolio_export_csv') }}">Export as CSV</a>
+        <button type="button" class="btn btn-secondary" onclick="optimizePortfolio()">🤖 AI Portfolio Suggestions</button>
+    </div>
+    <div id="optimizeResult" style="margin-top:12px;"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function trade(type) {
+        const symbol = document.getElementById('tradeSymbol').value.trim().toUpperCase();
+        const qty = parseFloat(document.getElementById('tradeQty').value);
+        const price = parseFloat(document.getElementById('tradePrice').value);
+        if (!symbol || !qty || qty <= 0) { showToast('Enter a symbol and quantity.', 'warning'); return; }
+        const payload = {symbol: symbol, type: type, quantity: qty};
+        if (price && price > 0) payload.price = price;
+        window.StockPredictorAPI.post('/api/portfolio/trade', payload)
+            .then(data => {
+                if (data.success) { showToast(data.message, 'success'); setTimeout(function(){ location.reload(); }, 900); }
+                else { showToast(data.message, 'warning'); }
+            })
+            .catch(err => showToast(err.message, 'error'));
+    }
+
+    function quickTrade(symbol) {
+        document.getElementById('tradeSymbol').value = symbol;
+        document.getElementById('tradeQty').value = 1;
+        document.getElementById('tradeSymbol').focus();
+    }
+
+    function cashMove(action) {
+        const amount = parseFloat(document.getElementById('cashAmount').value);
+        if (!amount || amount <= 0) { showToast('Enter an amount.', 'warning'); return; }
+        window.StockPredictorAPI.post('/api/portfolio/cash', {action: action, amount: amount})
+            .then(data => {
+                if (data.success) { showToast(data.message, 'success'); setTimeout(function(){ location.reload(); }, 900); }
+                else { showToast(data.message, 'warning'); }
+            })
+            .catch(err => showToast(err.message, 'error'));
+    }
+
+    function optimizePortfolio() {
+        const box = document.getElementById('optimizeResult');
+        box.innerHTML = '<span class="muted">Analyzing recommendations…</span>';
+        window.StockPredictorAPI.post('/api/portfolio/optimize', {risk_tolerance: 'medium'})
+            .then(data => {
+                if (!data.success) { box.innerHTML = '<span class="muted">' + escapeHtml(data.message || 'Unavailable') + '</span>'; return; }
+                const recs = data.recommendations || [];
+                if (!recs.length) { box.innerHTML = '<span class="muted">No recommendations available.</span>'; return; }
+                box.innerHTML = '<ul class="rec-list">' + recs.map(function (r) {
+                    const name = r.sector || r.etf_symbol || r.symbol || '';
+                    const alloc = r.allocation_pct !== undefined ? r.allocation_pct + '% allocation' : '';
+                    const ret = r.expected_return !== undefined ? (r.expected_return > 0 ? '+' : '') + r.expected_return + '% exp. return' : '';
+                    const sug = r.suggestion || '';
+                    const bits = [alloc, ret, sug].filter(Boolean).join(' · ');
+                    return '<li><strong>' + escapeHtml(name) + '</strong>' + (bits ? ' — ' + escapeHtml(bits) : '') + '</li>';
+                }).join('') + '</ul>';
+            })
+            .catch(err => box.innerHTML = '<span class="muted">' + escapeHtml(err.message) + '</span>');
+    }
+
+    function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+</script>
+{% endblock %}

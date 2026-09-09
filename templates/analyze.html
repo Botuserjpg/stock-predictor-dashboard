@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio Analytics - Stock Predictor Pro</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --info-color: #17a2b8;
+            --dark-color: #343a40;
+            --light-color: #f8f9fa;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header { 
+            background: rgba(255, 255, 255, 0.95); 
+            padding: 25px; 
+            border-radius: 15px; 
+            margin-bottom: 25px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .header h1 {
+            font-size: 2.2em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        
+        .nav { 
+            display: flex; 
+            gap: 15px; 
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        
+        .nav a { 
+            padding: 10px 20px; 
+            text-decoration: none; 
+            border-radius: 8px; 
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-primary { background: var(--primary-color); color: white; }
+        .nav-success { background: var(--success-color); color: white; }
+        .nav-secondary { background: var(--dark-color); color: white; }
+        
+        .nav a:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        
+        .card { 
+            background: rgba(255, 255, 255, 0.95); 
+            padding: 25px; 
+            border-radius: 15px; 
+            margin-bottom: 25px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .metrics-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+            gap: 20px; 
+            margin-bottom: 25px; 
+        }
+        
+        .metric-card { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px; 
+            border-radius: 12px; 
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+        }
+        
+        .positive { color: var(--success-color); }
+        .negative { color: var(--danger-color); }
+        .warning { color: var(--warning-color); }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+        }
+        
+        .btn-success { background: var(--success-color); color: white; }
+        .btn-primary { background: var(--primary-color); color: white; }
+        .btn-warning { background: var(--warning-color); color: var(--dark-color); }
+        
+        .chart-container {
+            height: 400px;
+            margin-top: 20px;
+        }
+        
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+        }
+        
+        .grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 25px;
+        }
+        
+        .simulation-panel {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .correlation-matrix {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .correlation-cell {
+            padding: 15px;
+            text-align: center;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        
+        .heatmap-low { background: #d4edda; color: #155724; }
+        .heatmap-medium { background: #fff3cd; color: #856404; }
+        .heatmap-high { background: #f8d7da; color: #721c24; }
+        
+        .risk-breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .risk-item {
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .tab-container {
+            margin-top: 20px;
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e9ecef;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .tab.active {
+            border-bottom-color: var(--primary-color);
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .prediction-slider {
+            margin: 20px 0;
+        }
+        
+        .prediction-slider input {
+            width: 100%;
+        }
+        
+        .simulation-result {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .real-time-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            background: var(--success-color);
+            color: white;
+            border-radius: 12px;
+            font-size: 0.7em;
+            margin-left: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
+        .portfolio-action {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .portfolio-action:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+        }
+        
+        .ai-insight-card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .ai-insight-card.warning {
+            border-left-color: var(--warning-color);
+            background: #fffbf0;
+        }
+        
+        .ai-insight-card.success {
+            border-left-color: var(--success-color);
+            background: #f0fff4;
+        }
+        
+        @media (max-width: 768px) {
+            .grid-2,
+            .grid-3 {
+                grid-template-columns: 1fr;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .tabs {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📈 Advanced Portfolio Analytics <span class="real-time-badge">LIVE</span></h1>
+            <div class="nav">
+                <a href="/dashboard" class="nav-primary">📊 Dashboard</a>
+                <a href="/portfolio" class="nav-success">💰 Portfolio</a>
+                <a href="/analytics" class="nav-secondary">📈 Analytics</a>
+                <a href="/analyze" class="nav-primary">🔍 Analyze Stocks</a>
+                <a href="/watchlist" class="nav-success">⭐ Watchlist</a>
+            </div>
+        </div>
+
+        <!-- Performance Overview -->
+        <div class="card">
+            <h2>📊 Performance Analytics <span class="real-time-badge">UPDATING</span></h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div>Total Return</div>
+                    <div style="font-size: 2em; font-weight: bold;" id="totalReturn">+8.75%</div>
+                    <div>Since Inception</div>
+                </div>
+                <div class="metric-card">
+                    <div>Annualized Return</div>
+                    <div style="font-size: 2em; font-weight: bold;" id="annualReturn">+15.2%</div>
+                    <div>CAGR</div>
+                </div>
+                <div class="metric-card">
+                    <div>Sharpe Ratio</div>
+                    <div style="font-size: 2em; font-weight: bold;" id="sharpeRatio">1.42</div>
+                    <div>Risk-Adjusted</div>
+                </div>
+                <div class="metric-card">
+                    <div>Max Drawdown</div>
+                    <div style="font-size: 2em; font-weight: bold;" class="negative" id="maxDrawdown">-12.3%</div>
+                    <div>Worst Period</div>
+                </div>
+            </div>
+
+            <!-- Performance Chart -->
+            <div class="chart-container">
+                <canvas id="performanceChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Tabs for Different Analytics -->
+        <div class="card">
+            <div class="tabs">
+                <div class="tab active" data-tab="risk">⚠️ Risk Analysis</div>
+                <div class="tab" data-tab="diversification">🏢 Diversification</div>
+                <div class="tab" data-tab="predictions">🔮 AI Predictions</div>
+                <div class="tab" data-tab="simulation">🎯 Simulation</div>
+            </div>
+
+            <!-- Risk Analysis Tab -->
+            <div class="tab-content active" id="risk-tab">
+                <h3>Comprehensive Risk Assessment</h3>
+                
+                <div class="grid-2">
+                    <div>
+                        <h4>Risk Breakdown</h4>
+                        <div class="risk-breakdown">
+                            <div class="risk-item" style="background: #d4edda;">
+                                <div>Market Risk</div>
+                                <div style="font-size: 1.5em; font-weight: bold;">65%</div>
+                            </div>
+                            <div class="risk-item" style="background: #fff3cd;">
+                                <div>Specific Risk</div>
+                                <div style="font-size: 1.5em; font-weight: bold;">25%</div>
+                            </div>
+                            <div class="risk-item" style="background: #f8d7da;">
+                                <div>Liquidity Risk</div>
+                                <div style="font-size: 1.5em; font-weight: bold;">10%</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h4>Volatility Analysis</h4>
+                        <div id="volatilityChart" class="chart-container"></div>
+                    </div>
+                </div>
+
+                <h4 style="margin-top: 30px;">Correlation Matrix</h4>
+                <div id="correlationMatrix" class="correlation-matrix">
+                    <!-- Correlation matrix will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Diversification Tab -->
+            <div class="tab-content" id="diversification-tab">
+                <h3>Portfolio Diversification Analysis</h3>
+                
+                <div class="grid-2">
+                    <div>
+                        <h4>Sector Allocation</h4>
+                        <div id="sectorAllocationChart" class="chart-container"></div>
+                    </div>
+                    <div>
+                        <h4>Market Cap Distribution</h4>
+                        <div id="marketCapChart" class="chart-container"></div>
+                    </div>
+                </div>
+
+                <div class="grid-3" style="margin-top: 20px;">
+                    <div class="metric-card">
+                        <div>Concentration Risk</div>
+                        <div style="font-size: 1.5em; font-weight: bold;" class="warning" id="concentrationRisk">MEDIUM</div>
+                        <div>Top 3 Holdings: 45%</div>
+                    </div>
+                    <div class="metric-card">
+                        <div>Diversification Score</div>
+                        <div style="font-size: 1.5em; font-weight: bold;" id="diversificationScore">72/100</div>
+                        <div>Optimal: 80+</div>
+                    </div>
+                    <div class="metric-card">
+                        <div>Geographic Diversification</div>
+                        <div style="font-size: 1.5em; font-weight: bold;" id="geoDiversification">MODERATE</div>
+                        <div>US: 85%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Predictions Tab -->
+            <div class="tab-content" id="predictions-tab">
+                <h3>AI-Powered Portfolio Predictions</h3>
+                
+                <div class="prediction-slider">
+                    <label for="predictionHorizon">Forecast Horizon: <span id="horizonValue">30 days</span></label>
+                    <input type="range" id="predictionHorizon" min="7" max="90" value="30" step="7">
+                </div>
+
+                <div class="grid-2">
+                    <div>
+                        <h4>Portfolio Value Forecast</h4>
+                        <div id="portfolioForecastChart" class="chart-container"></div>
+                    </div>
+                    <div>
+                        <h4>Prediction Confidence</h4>
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <div>Confidence Level</div>
+                                <div style="font-size: 1.5em; font-weight: bold;" id="confidenceLevel">85%</div>
+                                <div>AI Model Accuracy</div>
+                            </div>
+                            <div class="metric-card">
+                                <div>Expected Return</div>
+                                <div style="font-size: 1.5em; font-weight: bold;" class="positive" id="expectedReturn">+2.8%</div>
+                                <div>Next 30 Days</div>
+                            </div>
+                        </div>
+                        
+                        <h4 style="margin-top: 20px;">AI Insights</h4>
+                        <div id="aiInsights">
+                            <div class="ai-insight-card success">
+                                <strong>📈 Strong Momentum</strong>
+                                <p>Your portfolio shows strong upward momentum with technology stocks leading gains.</p>
+                            </div>
+                            <div class="ai-insight-card warning">
+                                <strong>⚠️ Sector Concentration</strong>
+                                <p>Consider diversifying beyond technology to reduce sector-specific risk.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Simulation Tab -->
+            <div class="tab-content" id="simulation-tab">
+                <h3>Portfolio Simulation & What-If Analysis</h3>
+                
+                <div class="simulation-panel">
+                    <div class="grid-3">
+                        <div class="form-group">
+                            <label for="simInvestment">Additional Investment ($)</label>
+                            <input type="number" id="simInvestment" value="1000" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="simHorizon">Time Horizon (Days)</label>
+                            <input type="number" id="simHorizon" value="90" min="7" max="365">
+                        </div>
+                        <div class="form-group">
+                            <label for="simStrategy">Investment Strategy</label>
+                            <select id="simStrategy">
+                                <option value="current">Current Allocation</option>
+                                <option value="aggressive">Aggressive Growth</option>
+                                <option value="conservative">Conservative</option>
+                                <option value="balanced">Balanced</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary" onclick="runSimulation()">🚀 Run Simulation</button>
+                </div>
+
+                <div id="simulationResults">
+                    <!-- Simulation results will be displayed here -->
+                </div>
+
+                <h4 style="margin-top: 30px;">Scenario Testing</h4>
+                <div class="grid-3">
+                    <div class="portfolio-action" onclick="testScenario('bull_market')">
+                        <h4>📈 Bull Market</h4>
+                        <p>+15% market growth</p>
+                    </div>
+                    <div class="portfolio-action" onclick="testScenario('bear_market')">
+                        <h4>📉 Bear Market</h4>
+                        <p>-15% market decline</p>
+                    </div>
+                    <div class="portfolio-action" onclick="testScenario('high_volatility')">
+                        <h4>⚡ High Volatility</h4>
+                        <p>25% volatility scenario</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Optimization Recommendations -->
+        <div class="card">
+            <h2>🤖 AI Portfolio Optimization</h2>
+            <div id="optimizationRecommendations">
+                <div class="grid-3">
+                    <div class="portfolio-action">
+                        <h4>Rebalance Portfolio</h4>
+                        <p>Optimize allocation for better risk-adjusted returns</p>
+                        <div style="margin: 10px 0;">
+                            <span class="warning" style="padding: 4px 8px; border-radius: 12px; font-size: 0.8em;">
+                                HIGH Priority
+                            </span>
+                        </div>
+                        <div style="font-size: 0.9em; color: #6c757d;">
+                            Expected Impact: +2.1%
+                        </div>
+                        <button class="btn btn-primary" onclick="applyOptimization('rebalance')" style="margin-top: 10px;">
+                            Apply
+                        </button>
+                    </div>
+                    <div class="portfolio-action">
+                        <h4>Add Defensive Stocks</h4>
+                        <p>Include utilities and consumer staples</p>
+                        <div style="margin: 10px 0;">
+                            <span class="warning" style="padding: 4px 8px; border-radius: 12px; font-size: 0.8em;">
+                                MEDIUM Priority
+                            </span>
+                        </div>
+                        <div style="font-size: 0.9em; color: #6c757d;">
+                            Expected Impact: Better downside protection
+                        </div>
+                        <button class="btn btn-primary" onclick="applyOptimization('defensive')" style="margin-top: 10px;">
+                            Apply
+                        </button>
+                    </div>
+                    <div class="portfolio-action">
+                        <h4>Tax-Loss Harvesting</h4>
+                        <p>Optimize tax efficiency</p>
+                        <div style="margin: 10px 0;">
+                            <span class="positive" style="padding: 4px 8px; border-radius: 12px; font-size: 0.8em;">
+                                LOW Priority
+                            </span>
+                        </div>
+                        <div style="font-size: 0.9em; color: #6c757d;">
+                            Expected Impact: $450 tax savings
+                        </div>
+                        <button class="btn btn-primary" onclick="applyOptimization('tax')" style="margin-top: 10px;">
+                            Apply
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export & Reporting -->
+        <div class="card">
+            <h2>📋 Reports & Export</h2>
+            <div class="portfolio-actions" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div class="portfolio-action">
+                    <h4>📊 Performance Report</h4>
+                    <p>Detailed performance analysis</p>
+                    <button class="btn btn-primary" onclick="generateReport('performance')">Generate PDF</button>
+                </div>
+                <div class="portfolio-action">
+                    <h4>⚠️ Risk Report</h4>
+                    <p>Comprehensive risk assessment</p>
+                    <button class="btn btn-warning" onclick="generateReport('risk')">Generate PDF</button>
+                </div>
+                <div class="portfolio-action">
+                    <h4>📈 Export Data</h4>
+                    <p>CSV format for analysis</p>
+                    <button class="btn btn-success" onclick="exportData()">Download CSV</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Real-time data management
+        let analyticsData = {};
+        let socket = null;
+
+        // Initialize analytics page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeWebSocket();
+            initializeTabs();
+            loadAnalyticsData();
+            startRealTimeUpdates();
+        });
+
+        // WebSocket for real-time data
+        function initializeWebSocket() {
+            try {
+                socket = io();
+                
+                socket.on('connect', function() {
+                    console.log('Connected to real-time analytics feed');
+                    document.querySelector('.real-time-badge').style.background = 'var(--success-color)';
+                });
+                
+                socket.on('analytics_update', function(data) {
+                    updateAnalyticsDisplay(data);
+                });
+                
+                socket.on('prediction_update', function(data) {
+                    updatePredictions(data);
+                });
+                
+                socket.on('disconnect', function() {
+                    document.querySelector('.real-time-badge').style.background = 'var(--danger-color)';
+                    document.querySelector('.real-time-badge').textContent = 'OFFLINE';
+                });
+                
+            } catch (error) {
+                console.log('WebSocket not available, using polling');
+                setupPollingUpdates();
+            }
+        }
+
+        // Start real-time updates
+        function startRealTimeUpdates() {
+            setInterval(() => {
+                simulateRealTimeAnalytics();
+            }, 5000);
+        }
+
+        // Simulate real-time analytics updates
+        function simulateRealTimeAnalytics() {
+            if (Object.keys(analyticsData).length === 0) return;
+            
+            // Simulate small changes in metrics
+            const randomChange = (Math.random() - 0.5) * 0.2;
+            analyticsData.total_return += randomChange;
+            analyticsData.annual_return += randomChange * 2;
+            
+            updateAnalyticsDisplay(analyticsData);
+        }
+
+        // Tab functionality
+        function initializeTabs() {
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Remove active class from all tabs and contents
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    
+                    // Add active class to clicked tab and corresponding content
+                    this.classList.add('active');
+                    const tabId = this.getAttribute('data-tab');
+                    document.getElementById(`${tabId}-tab`).classList.add('active');
+                });
+            });
+
+            // Prediction horizon slider
+            const horizonSlider = document.getElementById('predictionHorizon');
+            const horizonValue = document.getElementById('horizonValue');
+            
+            horizonSlider.addEventListener('input', function() {
+                const days = this.value;
+                horizonValue.textContent = `${days} days`;
+                updatePredictionsByHorizon(days);
+            });
+        }
+
+        // Load analytics data
+        async function loadAnalyticsData() {
+            try {
+                const response = await fetch('/api/portfolio/analytics');
+                const data = await response.json();
+                analyticsData = data;
+                
+                updateAnalyticsDisplay(data);
+                initializeCharts(data);
+                
+            } catch (error) {
+                console.error('Error loading analytics data:', error);
+                // Load sample data for demo
+                loadSampleAnalyticsData();
+            }
+        }
+
+        // Load sample analytics data
+        function loadSampleAnalyticsData() {
+            analyticsData = {
+                total_return: 8.75,
+                annual_return: 15.2,
+                sharpe_ratio: 1.42,
+                max_drawdown: -12.3,
+                history: {
+                    dates: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    values: [100000, 105000, 110000, 115000, 120000, 125430]
+                },
+                sector_allocation: {
+                    'Technology': 45,
+                    'Healthcare': 20,
+                    'Consumer Cyclical': 15,
+                    'Financial Services': 10,
+                    'Energy': 5,
+                    'Other': 5
+                },
+                large_cap: 60,
+                mid_cap: 25,
+                small_cap: 15,
+                correlations: {
+                    'AAPL': { 'AAPL': 1.00, 'MSFT': 0.75, 'TSLA': 0.45 },
+                    'MSFT': { 'AAPL': 0.75, 'MSFT': 1.00, 'TSLA': 0.35 },
+                    'TSLA': { 'AAPL': 0.45, 'MSFT': 0.35, 'TSLA': 1.00 }
+                },
+                volatility: {
+                    dates: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    values: [12.5, 13.2, 11.8, 14.5, 12.9, 12.3]
+                },
+                predictions: {
+                    dates: ['Jul 1', 'Jul 8', 'Jul 15', 'Jul 22', 'Jul 29'],
+                    actual: [125430, 126800, 128150, 127800, 129200],
+                    predicted: [126100, 127500, 128900, 130200, 131500],
+                    upper_bound: [128500, 129900, 131300, 132600, 133900],
+                    lower_bound: [123700, 125100, 126500, 127800, 129100]
+                }
+            };
+            
+            updateAnalyticsDisplay(analyticsData);
+            initializeCharts(analyticsData);
+        }
+
+        // Update analytics display
+        function updateAnalyticsDisplay(data) {
+            // Update performance metrics
+            document.getElementById('totalReturn').textContent = `${data.total_return >= 0 ? '+' : ''}${data.total_return.toFixed(2)}%`;
+            document.getElementById('annualReturn').textContent = `${data.annual_return >= 0 ? '+' : ''}${data.annual_return.toFixed(2)}%`;
+            document.getElementById('sharpeRatio').textContent = data.sharpe_ratio.toFixed(2);
+            document.getElementById('maxDrawdown').textContent = `${data.max_drawdown.toFixed(2)}%`;
+            
+            // Update correlation matrix
+            updateCorrelationMatrix(data.correlations);
+        }
+
+        // Update analytics display with real-time data
+        function updateAnalyticsDisplay(data) {
+            // Update performance metrics
+            document.getElementById('totalReturn').textContent = `${data.total_return >= 0 ? '+' : ''}${data.total_return.toFixed(2)}%`;
+            document.getElementById('annualReturn').textContent = `${data.annual_return >= 0 ? '+' : ''}${data.annual_return.toFixed(2)}%`;
+            document.getElementById('sharpeRatio').textContent = data.sharpe_ratio.toFixed(2);
+            document.getElementById('maxDrawdown').textContent = `${data.max_drawdown.toFixed(2)}%`;
+            
+            // Update correlation matrix
+            updateCorrelationMatrix(data.correlations);
+        }
+
+        // Initialize charts
+        function initializeCharts(data) {
+            // Performance chart
+            updatePerformanceChart(data.history);
+            
+            // Sector allocation chart
+            updateSectorChart(data.sector_allocation);
+            
+            // Market cap chart
+            updateMarketCapChart(data);
+            
+            // Volatility chart
+            updateVolatilityChart(data.volatility);
+            
+            // Prediction chart
+            updatePredictionsChart(data.predictions);
+        }
+
+        // Update performance chart
+        function updatePerformanceChart(history) {
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            
+            const labels = history?.dates || ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+            const values = history?.values || [100000, 105000, 110000, 115000, 120000, 125430];
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Portfolio Value',
+                        data: values,
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `$${context.parsed.y.toLocaleString()}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update sector allocation chart
+        function updateSectorChart(allocation) {
+            if (!allocation) return;
+            
+            const sectors = Object.keys(allocation);
+            const percentages = Object.values(allocation);
+            
+            const trace = {
+                labels: sectors,
+                values: percentages,
+                type: 'pie',
+                hole: 0.4,
+                marker: {
+                    colors: ['#007bff', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6c757d']
+                }
+            };
+
+            Plotly.newPlot('sectorAllocationChart', [trace], {
+                title: 'Sector Allocation',
+                margin: { t: 50, r: 30, b: 30, l: 30 }
+            });
+        }
+
+        // Update market cap chart
+        function updateMarketCapChart(data) {
+            const trace = {
+                labels: ['Large Cap', 'Mid Cap', 'Small Cap'],
+                values: [data.large_cap || 60, data.mid_cap || 25, data.small_cap || 15],
+                type: 'pie',
+                hole: 0.4,
+                marker: {
+                    colors: ['#007bff', '#28a745', '#ffc107']
+                }
+            };
+
+            Plotly.newPlot('marketCapChart', [trace], {
+                title: 'Market Cap Distribution',
+                margin: { t: 50, r: 30, b: 30, l: 30 }
+            });
+        }
+
+        // Update correlation matrix
+        function updateCorrelationMatrix(correlations) {
+            const matrixContainer = document.getElementById('correlationMatrix');
+            
+            if (!correlations || Object.keys(correlations).length === 0) {
+                matrixContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #6c757d;">No correlation data available</div>';
+                return;
+            }
+            
+            let html = '';
+            const symbols = Object.keys(correlations);
+            
+            // Header row
+            html += '<div class="correlation-cell" style="background: #f8f9fa; font-weight: bold;">Symbol</div>';
+            symbols.forEach(symbol => {
+                html += `<div class="correlation-cell" style="background: #f8f9fa; font-weight: bold;">${symbol}</div>`;
+            });
+            
+            // Data rows
+            symbols.forEach(symbol1 => {
+                html += `<div class="correlation-cell" style="background: #f8f9fa; font-weight: bold;">${symbol1}</div>`;
+                symbols.forEach(symbol2 => {
+                    const correlation = correlations[symbol1][symbol2] || 0;
+                    const absCorrelation = Math.abs(correlation);
+                    let heatmapClass = 'heatmap-low';
+                    
+                    if (absCorrelation > 0.7) heatmapClass = 'heatmap-high';
+                    else if (absCorrelation > 0.3) heatmapClass = 'heatmap-medium';
+                    
+                    html += `<div class="correlation-cell ${heatmapClass}">${correlation.toFixed(2)}</div>`;
+                });
+            });
+            
+            matrixContainer.innerHTML = html;
+        }
+
+        // Update volatility chart
+        function updateVolatilityChart(volatilityData) {
+            if (!volatilityData) return;
+            
+            const trace = {
+                x: volatilityData.dates,
+                y: volatilityData.values,
+                type: 'scatter',
+                mode: 'lines',
+                name: '30-Day Volatility',
+                line: { color: '#dc3545' }
+            };
+
+            Plotly.newPlot('volatilityChart', [trace], {
+                title: 'Portfolio Volatility Over Time',
+                xaxis: { title: 'Date' },
+                yaxis: { title: 'Volatility (%)' },
+                margin: { t: 50, r: 30, b: 50, l: 60 }
+            });
+        }
+
+        // Update predictions chart
+        function updatePredictionsChart(predictions) {
+            if (!predictions) return;
+            
+            const trace1 = {
+                x: predictions.dates,
+                y: predictions.actual,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Actual',
+                line: { color: '#007bff' }
+            };
+
+            const trace2 = {
+                x: predictions.dates,
+                y: predictions.predicted,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Predicted',
+                line: { color: '#28a745' }
+            };
+
+            const trace3 = {
+                x: predictions.dates.concat(predictions.dates.slice().reverse()),
+                y: predictions.upper_bound.concat(predictions.lower_bound.slice().reverse()),
+                type: 'scatter',
+                mode: 'lines',
+                fill: 'toself',
+                fillcolor: 'rgba(40, 167, 69, 0.2)',
+                line: { color: 'transparent' },
+                name: 'Confidence Interval',
+                showlegend: false
+            };
+
+            Plotly.newPlot('portfolioForecastChart', [trace3, trace1, trace2], {
+                title: 'Portfolio Value Forecast',
+                xaxis: { title: 'Date' },
+                yaxis: { title: 'Portfolio Value ($)' },
+                margin: { t: 50, r: 30, b: 50, l: 60 }
+            });
+        }
+
+        // Update predictions by horizon
+        function updatePredictionsByHorizon(horizon) {
+            // In real implementation, this would fetch new predictions for the specified horizon
+            console.log(`Updating predictions for ${horizon}-day horizon`);
+            
+            // Update expected return based on horizon
+            const baseReturn = 2.8;
+            const horizonMultiplier = horizon / 30;
+            const adjustedReturn = (baseReturn * horizonMultiplier).toFixed(2);
+            
+            document.getElementById('expectedReturn').textContent = `+${adjustedReturn}%`;
+        }
+
+        // Update predictions with real-time data
+        function updatePredictions(predictionData) {
+            if (predictionData) {
+                updatePredictionsChart(predictionData);
+                
+                // Update confidence metrics
+                document.getElementById('confidenceLevel').textContent = `${predictionData.confidence || 85}%`;
+                document.getElementById('expectedReturn').textContent = `${predictionData.expected_return >= 0 ? '+' : ''}${predictionData.expected_return?.toFixed(2) || '2.8'}%`;
+            }
+        }
+
+        // Run simulation
+        async function runSimulation() {
+            const investment = document.getElementById('simInvestment').value;
+            const horizon = document.getElementById('simHorizon').value;
+            const strategy = document.getElementById('simStrategy').value;
+            
+            try {
+                const response = await fetch('/api/portfolio/simulation', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        additional_investment: parseFloat(investment),
+                        horizon: parseInt(horizon),
+                        strategy: strategy
+                    })
+                });
+                
+                const results = await response.json();
+                displaySimulationResults(results);
+                
+            } catch (error) {
+                console.error('Error running simulation:', error);
+                // Show sample results for demo
+                displaySampleSimulationResults(investment, horizon, strategy);
+            }
+        }
+
+        // Display simulation results
+        function displaySimulationResults(results) {
+            const resultsContainer = document.getElementById('simulationResults');
+            
+            let html = `
+                <div class="simulation-result">
+                    <h4>Simulation Results</h4>
+                    <div class="grid-3">
+                        <div>
+                            <strong>Expected Value:</strong><br>
+                            <span style="font-size: 1.5em; font-weight: bold;" class="positive">
+                                $${results.expected_value.toFixed(2)}
+                            </span>
+                        </div>
+                        <div>
+                            <strong>Expected Return:</strong><br>
+                            <span style="font-size: 1.5em; font-weight: bold;" class="positive">
+                                ${results.expected_return >= 0 ? '+' : ''}${results.expected_return.toFixed(2)}%
+                            </span>
+                        </div>
+                        <div>
+                            <strong>Success Probability:</strong><br>
+                            <span style="font-size: 1.5em; font-weight: bold;">
+                                ${results.success_probability}%
+                            </span>
+                        </div>
+                    </div>
+                    <p style="margin-top: 15px;"><strong>AI Analysis:</strong> ${results.analysis}</p>
+                </div>
+            `;
+            
+            resultsContainer.innerHTML = html;
+        }
+
+        // Display sample simulation results
+        function displaySampleSimulationResults(investment, horizon, strategy) {
+            const baseValue = 125430;
+            const strategies = {
+                'current': { return: 2.8, probability: 75 },
+                'aggressive': { return: 4.2, probability: 65 },
+                'conservative': { return: 1.8, probability: 85 },
+                'balanced': { return: 3.1, probability: 80 }
+            };
+            
+            const strategyData = strategies[strategy];
+            const expectedValue = baseValue + (parseFloat(investment) * (1 + strategyData.return / 100));
+            const expectedReturn = strategyData.return;
+            
+            const results = {
+                expected_value: expectedValue,
+                expected_return: expectedReturn,
+                success_probability: strategyData.probability,
+                analysis: `Based on ${strategy} strategy, your portfolio shows strong potential for growth with ${strategyData.probability}% probability of achieving target returns.`
+            };
+            
+            displaySimulationResults(results);
+        }
+
+        // Test scenario
+        function testScenario(scenario) {
+            const scenarios = {
+                'bull_market': { name: 'Bull Market', growth: 15 },
+                'bear_market': { name: 'Bear Market', growth: -15 },
+                'high_volatility': { name: 'High Volatility', growth: 0 }
+            };
+            
+            const selected = scenarios[scenario];
+            
+            // Update simulation inputs for scenario testing
+            document.getElementById('simInvestment').value = '0';
+            document.getElementById('simHorizon').value = '90';
+            document.getElementById('simStrategy').value = 'current';
+            
+            // Show scenario-specific analysis
+            const analysis = {
+                'bull_market': "In a bull market scenario, your portfolio could gain +15% with technology stocks outperforming. Consider taking some profits at resistance levels.",
+                'bear_market': "In a bear market, defensive positioning is key. Your current allocation may experience -15% drawdown. Consider adding hedges.",
+                'high_volatility': "High volatility environments require careful risk management. Your portfolio may experience larger swings but also presents trading opportunities."
+            };
+            
+            const results = {
+                expected_value: 125430 * (1 + selected.growth / 100),
+                expected_return: selected.growth,
+                success_probability: scenario === 'bull_market' ? 70 : 60,
+                analysis: analysis[scenario]
+            };
+            
+            displaySimulationResults(results);
+        }
+
+        // Generate report
+        function generateReport(type) {
+            alert(`Generating ${type} report...\nThis would download a PDF with detailed ${type} analysis.`);
+            // In real implementation, this would call an API endpoint to generate PDF
+        }
+
+        // Export data
+        function exportData() {
+            alert('Exporting portfolio analytics data to CSV...');
+            // In real implementation, this would download a CSV file
+        }
+
+        // Apply optimization
+        function applyOptimization(optimizationId) {
+            if (confirm('Apply this optimization to your portfolio?')) {
+                alert(`Applying optimization ${optimizationId}...\nThis would automatically rebalance your portfolio based on AI recommendations.`);
+                // In real implementation, this would call an API endpoint
+            }
+        }
+
+        // Polling fallback
+        function setupPollingUpdates() {
+            setInterval(() => {
+                loadAnalyticsData();
+            }, 30000);
+        }
+    </script>
+</body>
+</html>

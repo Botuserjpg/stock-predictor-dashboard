@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Market Analytics — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>📈 Market Analytics</h1>
+    <span class="pill pill-blue">Market-wide signals</span>
+</div>
+<p class="subtitle">Index health, sector rotation and technical overview</p>
+
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">🌍</span> Market Indices</h2>
+        <span class="pill pill-blue">{{ indices|length }} tracked</span>
+    </div>
+    {% if indices %}
+        <div class="grid">
+            {% for symbol, index in indices.items() %}
+                <div class="metric-card">
+                    <div class="metric-label">{{ index.name }}</div>
+                    <div class="metric-value">{{ index.price }}</div>
+                    <div class="metric-change {% if index.change_pct >= 0 %}trend-up{% else %}trend-down{% endif %}">
+                        <span class="arrow">{{ '▲' if index.change_pct >= 0 else '▼' }}</span>
+                        {{ index.change_pct | round(2) }}%
+                    </div>
+                    <div class="metric-sub">H: {{ index.high }} · L: {{ index.low }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="muted">Index data unavailable.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">🏭</span> Sector Performance</h2>
+        {% if sectors %}
+            <span class="pill {{ 'pill-green' if sectors.values()|list|select('>=', 0)|list|length >= (sectors|length / 2) else 'pill-red' }}">
+                {{ sectors.values()|list|select('>=', 0)|list|length }} of {{ sectors|length }} up
+            </span>
+        {% endif %}
+    </div>
+    {% if sectors %}
+        {% for name, value in sectors.items() %}
+            {% set width_pct = ([value, 0] | max if value >= 0 else [value * -1, 0] | max) | round(1) %}
+            <div class="sector-row">
+                <span class="sector-name">{{ name }}</span>
+                <div class="sector-track">
+                    <div class="sector-fill {{ 'up' if value >= 0 else 'down' }}"
+                         style="width: {{ width_pct if width_pct <= 100 else 100 }}%;"></div>
+                </div>
+                <span class="sector-change {{ 'trend-up' if value >= 0 else 'trend-down' }}">
+                    {{ '▲' if value >= 0 else '▼' }} {{ "%.2f" | format(value) }}%
+                </span>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p class="muted">Sector data unavailable.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">🔬</span> Technical Overview</h2>
+        {% if technical %}
+            <span class="pill pill-purple">{{ technical|length }} symbols</span>
+        {% endif %}
+    </div>
+    {% if technical %}
+        <div class="table-wrap">
+            <table class="stock-table">
+                <thead>
+                    <tr><th>Symbol</th><th>RSI</th><th>Trend</th><th>MACD</th></tr>
+                </thead>
+                <tbody>
+                    {% for symbol in symbols %}
+                        {% set tech = technical.get(symbol) or {} %}
+                        <tr>
+                            <td><a href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ symbol }}">{{ symbol }} ⚡</a></td>
+                            <td class="mono">{{ tech.get('rsi', '—') }}</td>
+                            <td>
+                                {% set t = (tech.get('trend') or '')|upper %}
+                                <span class="pill {{ 'pill-green' if t == 'BULLISH' else ('pill-red' if t == 'BEARISH' else 'pill-neutral') }}">
+                                    {{ t or '—' }}
+                                </span>
+                            </td>
+                            <td>
+                                {% set m = (tech.get('macd_signal') or '')|upper %}
+                                <span class="pill {{ 'pill-green' if m == 'BULLISH' else ('pill-red' if m == 'BEARISH' else 'pill-neutral') }}">
+                                    {{ m or '—' }}
+                                </span>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="muted">Technical overview unavailable.</p>
+    {% endif %}
+</section>
+{% endblock %}

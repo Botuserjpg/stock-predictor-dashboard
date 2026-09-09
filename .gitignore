@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local environments and secrets
+.env
+.venv/
+.venv*/
+venv/
+env/
+.streamlit/secrets.toml
+
+# Application runtime state
+runtime_state/
+audit_logs/
+stock_predictor.log
+stock_predictor_app.log
+data_quality/
+model_registry/
+*.db
+
+# Generated data/model artifacts
+data_cache/
+model_cache/
+saved_models/
+models/*.h5
+models/*_metadata.json
+charts/
+Reports/
+reports/
+portfolios/
+sentiment_cache/
+backtest_artifacts/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

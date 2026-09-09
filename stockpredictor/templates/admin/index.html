@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Admin — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>🛡️ Admin Console</h1>
+    <div>
+        <a class="btn btn-outline" href="{{ url_for('admin.users') }}">👥 Users</a>
+        <a class="btn btn-outline" href="{{ url_for('admin.audit') }}">🧾 Audit Log</a>
+    </div>
+</div>
+<p class="subtitle">Runtime statistics and management controls</p>
+
+<section class="grid">
+    <div class="metric-card">
+        <div class="metric-label">Total Users</div>
+        <div class="metric-value">{{ stats.users }}</div>
+        <div class="metric-sub">across all roles</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Admins</div>
+        <div class="metric-value">{{ stats.admins }}</div>
+        <div class="metric-sub">privileged accounts</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Locked Accounts</div>
+        <div class="metric-value {% if stats.locked %}trend-down{% endif %}">{{ stats.locked }}</div>
+        <div class="metric-sub">temporarily blocked</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Audit Events (today)</div>
+        <div class="metric-value">{{ stats.audit_today }}</div>
+        <div class="metric-sub">{{ stats.audit_events }} total recorded</div>
+    </div>
+</section>
+
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">🔥</span> Top Audit Events</h2>
+    </div>
+    {% if events_top_event %}
+        <div class="table-wrap">
+            <table class="stock-table">
+                <thead><tr><th>Event</th><th>Count</th></tr></thead>
+                <tbody>
+                    {% for event, count in events_top_event %}
+                        <tr>
+                            <td class="mono">{{ event }}</td>
+                            <td>{{ count }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="muted">No audit events recorded yet.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">🕒</span> Recent Activity</h2>
+        <span class="pill pill-blue">latest 40</span>
+    </div>
+    {% if events_24h %}
+        <div class="table-wrap">
+            <table class="stock-table">
+                <thead><tr><th>Timestamp</th><th>Event</th><th>User</th><th>Request</th></tr></thead>
+                <tbody>
+                    {% for entry in events_24h %}
+                        <tr>
+                            <td class="mono">{{ entry.timestamp.replace('T', ' ') }}</td>
+                            <td class="mono">{{ entry.event }}</td>
+                            <td>{{ entry.user_id or '—' }}</td>
+                            <td class="mono">{{ entry.request_id or '—' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="muted">No recent activity.</p>
+    {% endif %}
+</section>
+{% endblock %}

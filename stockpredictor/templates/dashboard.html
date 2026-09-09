@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — {{ app_name }}{% endblock %}
+{% block content %}
+{% if demo_mode %}
+<div class="flash flash-info" role="status">
+    Public read-only demo. Create an account to save watchlists, portfolios, alerts, and analyses.
+</div>
+{% endif %}
+<div class="hero">
+    <div class="hero-glow"></div>
+    <h1>Welcome back, {{ email }}</h1>
+    <p class="subtitle">Live market overview, your predictions and price alerts</p>
+    <div class="hero-actions">
+        {% if demo_mode %}
+        <a class="btn btn-success" href="{{ url_for('auth.register') }}">Create an account</a>
+        <a class="btn btn-secondary" href="{{ url_for('auth.login') }}">Log in</a>
+        {% else %}
+        <a class="btn btn-success" href="{{ url_for('analyze.analyze_stock') }}">🔍 Analyze a Stock</a>
+        <a class="btn btn-secondary" href="{{ url_for('analyze.analyze_any_stock') }}">🌍 Global Markets</a>
+        <a class="btn btn-outline" href="{{ url_for('analytics.page') }}">📈 Market Analytics</a>
+        <a class="btn btn-outline" href="{{ url_for('portfolio.page') }}">💼 Portfolio</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid stats-grid">
+    <div class="metric-card">
+        <div class="metric-label">Watchlist</div>
+        <div class="metric-value">{{ watchlist|length }}</div>
+        <div class="metric-sub">symbols tracked</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Predictions</div>
+        <div class="metric-value">{{ predictions|length }}</div>
+        <div class="metric-sub">cached signals</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Price Alerts</div>
+        <div class="metric-value">{{ alerts|length }}</div>
+        <div class="metric-sub">active</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Analyses</div>
+        <div class="metric-value">{{ history|length }}</div>
+        <div class="metric-sub">you have run</div>
+    </div>
+</div>
+
+{% if live_watchlist %}
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">📡</span> Live Watchlist</h2>
+        <span class="pill pill-blue">{{ live_watchlist|length }} symbols</span>
+    </div>
+    <div class="grid">
+        {% for item in live_watchlist %}
+            {% set q = item.quote %}
+            {% set pct = q.get('change_pct') %}
+            <div class="metric-card live-watch-card">
+                <div class="metric-label">
+                    <strong>{{ item.symbol }}</strong>
+                    {% if not demo_mode %}<a class="btn btn-outline btn-sm" href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ item.symbol }}">Analyze</a>{% endif %}
+                </div>
+                <div class="metric-value">{{ "$%.2f" | format(q.get('price', 0)) if q.get('price') else '—' }}</div>
+                <div class="metric-change {{ 'trend-up' if pct is not none and pct >= 0 else ('trend-down' if pct is not none else 'trend-neutral') }}">
+                    {% if pct is not none %}<span class="arrow">{{ '▲' if pct >= 0 else '▼' }}</span> {{ "%.2f" | format(pct) }}%{% else %}—{% endif %}
+                </div>
+                {% if item.closes|length >= 2 %}
+                    <div data-sparkline="{{ item.closes | tojson }}"></div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+</section>
+
+{% if not demo_mode %}
+<section class="card" id="relativeStrengthCard" data-watchlist="{{ watchlist | tojson }}">
+    <div class="card-header">
+        <h2><span class="card-emoji">⚖️</span> Relative Strength vs SPY</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+            <span class="pill pill-blue">Composite 0–100</span>
+            <button class="btn btn-outline btn-sm" id="loadRsBtn" onclick="StockPredictorAPI.loadRelativeStrength()">↻ Load</button>
+        </div>
+    </div>
+    <div id="rsPanel">
+        <p class="muted">Compare your watchlist against the S&amp;P 500 across 20/60/120-day windows.</p>
+    </div>
+</section>
+{% endif %}
+
+{% if not demo_mode %}
+<section class="card" id="driftCard" data-watchlist="{{ watchlist | tojson }}">
+    <div class="card-header">
+        <h2><span class="card-emoji">🧬</span> Model Drift Monitor</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+            <span class="pill pill-blue">PSI vs baseline</span>
+            <button class="btn btn-outline btn-sm" id="loadDriftBtn" onclick="StockPredictorAPI.loadDrift()">↻ Check</button>
+        </div>
+    </div>
+    <div id="driftPanel">
+        <p class="muted">Detects distribution shift in the features your models consume. PSI &gt; 0.25 flags a model for retraining.</p>
+    </div>
+</section>
+{% endif %}
+{% endif %}
+
+{% if movers.gainers or movers.losers %}
+<div class="grid two-col">
+    <section class="card">
+        <div class="card-header">
+            <h2><span class="card-emoji">🚀</span> Top Movers</h2>
+            <span class="pill pill-green">Gainers</span>
+        </div>
+        <div class="table-wrap">
+            <table class="stock-table">
+                <thead><tr><th>Symbol</th><th>Price</th><th>Change</th></tr></thead>
+                <tbody>
+                    {% for item in movers.gainers %}
+                        <tr>
+                            <td><a href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ item.symbol }}">{{ item.symbol }}</a></td>
+                            <td class="mono">${{ "%.2f" | format(item.quote.get('price', 0)) }}</td>
+                            <td class="trend-up mover-arrow">▲ {{ "%.2f" | format(item.quote.get('change_pct')) }}%</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <section class="card">
+        <div class="card-header">
+            <h2><span class="card-emoji">📉</span> Top Losers</h2>
+            <span class="pill pill-red">Losers</span>
+        </div>
+        <div class="table-wrap">
+            <table class="stock-table">
+                <thead><tr><th>Symbol</th><th>Price</th><th>Change</th></tr></thead>
+                <tbody>
+                    {% for item in movers.losers %}
+                        <tr>
+                            <td><a href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ item.symbol }}">{{ item.symbol }}</a></td>
+                            <td class="mono">${{ "%.2f" | format(item.quote.get('price', 0)) }}</td>
+                            <td class="trend-down mover-arrow">▼ {{ "%.2f" | format(item.quote.get('change_pct')) }}%</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endif %}
+
+{% if history %}
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">🕘</span> Your Recent Analyses</h2>
+        <span class="pill pill-blue">{{ history|length }} saved</span>
+    </div>
+    <div class="table-wrap">
+        <table class="stock-table">
+            <thead><tr><th>Symbol</th><th>Signal</th><th>Confidence</th><th>Target</th><th>Model</th><th>When</th><th></th></tr></thead>
+            <tbody>
+                {% for item in history %}
+                    {% set buy = item.signal == 'BUY' %}
+                    <tr>
+                        <td><strong>{{ item.symbol }}</strong></td>
+                        <td><span class="pill {{ 'pill-green' if buy else 'pill-red' }}">{{ item.signal }}</span></td>
+                        <td>{{ "%.0f" | format((item.confidence or 0) * 100) }}%</td>
+                        <td class="mono">${{ "%.2f" | format(item.predicted_price) }}</td>
+                        <td class="muted">{{ item.model_type }}</td>
+                        <td class="muted">{{ item.run_at }}</td>
+                        <td><a class="btn btn-outline btn-sm" href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ item.symbol }}">Re-run</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">🌍</span> Market Indices</h2>
+        <span class="pill pill-blue">{{ indices|length }} tracked</span>
+    </div>
+    {% if indices %}
+        <div class="grid">
+            {% for symbol, index in indices.items() %}
+                <div class="metric-card">
+                    <div class="metric-label">{{ index.name }}</div>
+                    <div class="metric-value">{{ index.price }}</div>
+                    <div class="metric-change {% if index.change_pct >= 0 %}trend-up{% else %}trend-down{% endif %}">
+                        <span class="arrow">{{ '▲' if index.change_pct >= 0 else '▼' }}</span>
+                        {{ "%.2f" | format(index.change_pct) }}%
+                    </div>
+                    <div class="metric-sub">H: {{ index.high }} · L: {{ index.low }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="muted">Market index data is temporarily unavailable.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">📋</span> Your Watchlist</h2>
+        <span class="pill {{ 'pill-green' if watchlist else 'pill-neutral' }}">{{ watchlist|length }} symbols</span>
+    </div>
+    {% if watchlist %}
+        <ul class="symbol-list">
+            {% for symbol in watchlist %}
+                <li><a href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ symbol }}">{{ symbol }} ⚡</a></li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="muted">Your watchlist is empty.
+            <a href="{{ url_for('watchlist.page') }}">Manage your watchlist</a>.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">🔮</span> Cached Predictions</h2>
+        <span class="pill {{ 'pill-gold' if predictions else 'pill-neutral' }}">{{ predictions|length }} saved</span>
+    </div>
+    {% if predictions %}
+        <div class="grid">
+            {% for symbol, pred in predictions.items() %}
+                {% set buy = pred.signal == 'BUY' %}
+                <div class="metric-card">
+                    <div class="metric-label">
+                        {{ symbol }}
+                        <span class="pill {{ 'pill-green' if buy else 'pill-red' }}">{{ pred.signal }}</span>
+                    </div>
+                    <div class="metric-value">${{ "%.2f" | format(pred.predicted_price) }}</div>
+                    <div class="metric-change {{ 'trend-up' if buy else 'trend-down' }}">
+                        {{ pred.sentiment }}
+                    </div>
+                    <div class="metric-sub">
+                        Confidence:
+                        <div class="confidence-bar" style="margin-top:6px;">
+                            <div class="confidence-fill" style="width: {{ (pred.confidence or 0) * 100 }}%;"></div>
+                        </div>
+                        {{ "%.0f" | format((pred.confidence or 0) * 100) }}%
+                    </div>
+                    <a class="btn btn-outline btn-sm" style="margin-top:12px;"
+                       href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ symbol }}">Re-Analyze</a>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="muted">No predictions cached yet.
+            <a href="{{ url_for('analyze.analyze_stock') }}">Analyze a stock</a> to get started.</p>
+    {% endif %}
+</section>
+
+{% if alerts %}
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">🔔</span> Active Price Alerts</h2>
+        <span class="pill pill-gold">{{ alerts|length }} active</span>
+    </div>
+    <ul class="symbol-list">
+        {% for alert in alerts %}
+            <li>
+                {{ alert.symbol }}
+                <span class="muted">— {{ 'above' if alert.condition == 'above' else 'below' }} ${{ alert.threshold }}</span>
+                <a href="{{ url_for('watchlist.page') }}" class="btn btn-outline btn-sm" style="margin-left:8px;">Manage</a>
+            </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+{% endblock %}

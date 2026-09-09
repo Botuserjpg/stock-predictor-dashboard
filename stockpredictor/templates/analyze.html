@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="auth-card">
+    <h1>📊 {{ title }}</h1>
+    <p class="subtitle">{{ subtitle }}</p>
+
+    <div class="info-banner">
+        <p>Analyze US, Canadian, UK, Indian and other global symbols.
+           Examples: <code>AAPL</code>, <code>TSLA</code>, <code>MSFT</code>, <code>SHOP.TO</code>, <code>HSBA.L</code>, <code>RELIANCE.NS</code>.</p>
+    </div>
+
+    <form method="POST" action="{{ action_url }}" id="stockForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label for="symbol">Stock Symbol</label>
+            <div class="autocomplete">
+                <input type="text" id="symbol" name="symbol" required value="{{ symbol }}"
+                       placeholder="AAPL, TSLA, MSFT, RELIANCE.NS"
+                       autocapitalize="characters" spellcheck="false" autocomplete="off">
+                <ul class="autocomplete-list" id="symbolSuggestions" role="listbox" hidden></ul>
+            </div>
+            <p class="field-hint" id="symbolHint"></p>
+        </div>
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="period">Historical Period</label>
+                <select id="period" name="period">
+                    <option value="6mo">6 Months</option>
+                    <option value="1y" selected>1 Year</option>
+                    <option value="2y">2 Years</option>
+                    <option value="5y">5 Years</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="days">Forecast Period</label>
+                <select id="days" name="days">
+                    <option value="7">1 Week</option>
+                    <option value="30" selected>1 Month</option>
+                    <option value="60">2 Months</option>
+                    <option value="90">3 Months</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="model_type">AI Model</label>
+                <select id="model_type" name="model_type">
+                    <option value="AUTO" selected>Auto (best fit)</option>
+                    <option value="LSTM">LSTM</option>
+                    <option value="GRU">GRU</option>
+                    <option value="ENSEMBLE">Ensemble</option>
+                </select>
+                <p class="field-hint">Auto picks the best model for each symbol.</p>
+            </div>
+            <div class="form-group">
+                <label for="risk">Risk Tolerance</label>
+                <select id="risk" name="risk">
+                    <option value="low">Low</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="high">High</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-success btn-block">⚡ Generate AI Forecast</button>
+    </form>
+
+    <div class="quick-links">
+        <a href="{{ url_for('analyze.analyze_stock') }}?symbol=AAPL">AAPL</a>
+        <a href="{{ url_for('analyze.analyze_stock') }}?symbol=MSFT">MSFT</a>
+        <a href="{{ url_for('analyze.analyze_stock') }}?symbol=TSLA">TSLA</a>
+        <a href="{{ url_for('analyze.analyze_stock') }}?symbol=GOOGL">GOOGL</a>
+        <a href="{{ url_for('analyze.analyze_stock') }}?symbol=NVDA">NVDA</a>
+        <a href="{{ url_for('analyze.analyze_any_stock') }}?symbol=RELIANCE.NS">RELIANCE.NS</a>
+    </div>
+</div>
+{% endblock %}

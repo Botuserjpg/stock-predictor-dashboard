@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="error-card">
+    <div class="error-code">{{ code if code is defined else '⚠️' }}</div>
+    <h1>{{ title }}</h1>
+    <p>{{ message }}</p>
+    <a class="btn btn-primary" href="{{ back_url or url_for('main.index') }}">Go Back</a>
+</div>
+{% endblock %}

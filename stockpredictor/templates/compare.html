@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Compare Stocks — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>⚖️ Compare Stocks</h1>
+    <span class="pill pill-blue">2–5 symbols side by side</span>
+</div>
+<p class="subtitle">Head-to-head quotes, technicals, sentiment and a normalized momentum chart</p>
+
+<section class="card">
+    <h2>Symbols to Compare</h2>
+    <form method="POST" action="{{ url_for('compare.page') }}" id="compareForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="inline-form">
+            <input type="text" id="compareSymbols" name="symbols"
+                   placeholder="AAPL, MSFT, NVDA" autocapitalize="characters"
+                   spellcheck="false" value="{{ compare.symbols | join(', ') if compare else '' }}">
+            <button type="submit" class="btn btn-primary">⚡ Compare</button>
+        </div>
+        <p class="field-hint">
+            Press Compare to pull live quotes, technical indicators and sentiment for each symbol.
+            Example sets: <a href="#" class="preset" data-set="AAPL,MSFT,NVDA">AAPL, MSFT, NVDA</a> ·
+            <a href="#" class="preset" data-set="TSLA,NIO,RIVN">TSLA, NIO, RIVN</a> ·
+            <a href="#" class="preset" data-set="RELIANCE.NS,TCS.NS,INFY.NS">RELIANCE.NS, TCS.NS, INFY.NS</a>
+        </p>
+    </form>
+    {% if error %}
+        <div class="flash flash-error" style="margin-top:14px;">{{ error }}</div>
+    {% endif %}
+</section>
+
+{% if compare %}
+{% set symbols = compare.symbols %}
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">📈</span> Momentum Overlay <span class="muted">(normalized to 100)</span></h2>
+        <span class="pill pill-purple">{{ symbols|length }} symbols</span>
+    </div>
+    <div class="chart-legend">
+        {% for symbol in symbols %}
+            <span class="legend-item">
+                <span class="legend-swatch" style="background:{{ compare.colors[symbol] }}"></span>
+                {{ symbol }}
+            </span>
+        {% endfor %}
+    </div>
+    <div class="chart-wrap" id="compareChart" data-series="{{ compare.series | tojson }}"></div>
+</section>
+
+<section class="grid">
+    {% for symbol in symbols %}
+        {% set quote = compare.quotes.get(symbol) or {} %}
+        {% set tech = compare.technical.get(symbol) or {} %}
+        {% set senti = compare.sentiment.get(symbol) or {} %}
+        {% set pct = quote.get('change_pct') %}
+        {% set t = (tech.get('trend') or '—')|upper %}
+        {% set m = (tech.get('macd_signal') or '—')|upper %}
+        <div class="metric-card vs-card">
+            <div class="metric-label">
+                <span class="chip-dot" style="background:{{ compare.colors[symbol] }}"></span>
+                {{ symbol }}
+            </div>
+            <div class="metric-value">{{ "$%.2f" | format(quote.get('price', 0)) if quote.get('price') else '—' }}</div>
+            <div class="metric-change {{ 'trend-up' if pct is not none and pct >= 0 else ('trend-down' if pct is not none else 'trend-neutral') }}">
+                {% if pct is not none %}<span class="arrow">{{ '▲' if pct >= 0 else '▼' }}</span> {{ "%.2f" | format(pct) }}%{% else %}—{% endif %}
+            </div>
+            <div class="metric-sub">
+                RSI {{ tech.get('rsi', '—') }} ·
+                <span class="pill {{ 'pill-green' if t == 'BULLISH' else ('pill-red' if t == 'BEARISH' else 'pill-neutral') }}">{{ t }}</span>
+            </div>
+            <div class="metric-sub">
+                Sentiment:
+                <span class="pill {{ 'pill-green' if senti.get('label') == 'BULLISH' else ('pill-red' if senti.get('label') == 'BEARISH' else 'pill-gold') }}">
+                    {{ senti.get('label', '—') }}
+                </span>
+            </div>
+            <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+                <a class="btn btn-outline btn-sm" href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ symbol }}">Analyze</a>
+                <button type="button" class="btn btn-outline btn-sm" onclick="addCompared('{{ symbol }}')">＋ Watchlist</button>
+            </div>
+        </div>
+    {% endfor %}
+</section>
+
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">📋</span> Side-by-Side Summary</h2>
+        <span class="pill pill-blue">{{ symbols|length }} columns</span>
+    </div>
+    <div class="table-wrap">
+        <table class="stock-table">
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    {% for symbol in symbols %}
+                        <th>{{ symbol }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% set metric_rows = [
+                    ('Price', 'quote', 'price', 'money'),
+                    ('24h Change', 'quote', 'change_pct', 'pct_colored'),
+                    ('RSI (14)', 'tech', 'rsi', 'raw'),
+                    ('Trend', 'tech', 'trend', 'trend_pill'),
+                    ('MACD Signal', 'tech', 'macd_signal', 'trend_pill'),
+                    ('Volatility', 'tech', 'volatility_level', 'raw'),
+                    ('Sentiment Score', 'senti', 'score', 'score_colored'),
+                    ('Sentiment', 'senti', 'label', 'sentiment_pill'),
+                ] %}
+                {% for label, section, key, kind in metric_rows %}
+                    <tr>
+                        <td><strong>{{ label }}</strong></td>
+                        {% for symbol in symbols %}
+                            {% if section == 'quote' %}
+                                {% set value = compare.quotes.get(symbol, {}).get(key) %}
+                            {% elif section == 'tech' %}
+                                {% set value = compare.technical.get(symbol, {}).get(key) %}
+                            {% else %}
+                                {% set value = compare.sentiment.get(symbol, {}).get(key) %}
+                            {% endif %}
+                            <td>
+                                {% if kind == 'money' and value is not none %}
+                                    <span class="mono">{{ "$%.2f" | format(value) }}</span>
+                                {% elif kind == 'pct_colored' and value is not none %}
+                                    <span class="mono {{ 'trend-up' if value >= 0 else 'trend-down' }}">{{ '▲' if value >= 0 else '▼' }} {{ "%.2f" | format(value) }}%</span>
+                                {% elif kind == 'score_colored' and value is not none %}
+                                    <span class="mono {{ 'trend-up' if value >= 0 else 'trend-down' }}">{{ "%.2f" | format(value) }}</span>
+                                {% elif kind == 'trend_pill' %}
+                                    {% set v = (value or '—')|upper %}
+                                    <span class="pill {{ 'pill-green' if v == 'BULLISH' else ('pill-red' if v == 'BEARISH' else 'pill-neutral') }}">{{ v }}</span>
+                                {% elif kind == 'sentiment_pill' %}
+                                    {% set v = value or '—' %}
+                                    <span class="pill {{ 'pill-green' if v == 'BULLISH' else ('pill-red' if v == 'BEARISH' else 'pill-gold') }}">{{ v }}</span>
+                                {% else %}
+                                    <span class="mono">{{ value if value is not none else '—' }}</span>
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">🤖</span> Quick Signals</h2>
+    </div>
+    <div class="quick-links">
+        {% for symbol in symbols %}
+            <a href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ symbol }}">📊 Deep-dive {{ symbol }}</a>
+        {% endfor %}
+        <a href="{{ url_for('analytics.page') }}">📈 Market Analytics</a>
+    </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.querySelectorAll('.preset').forEach(function (link) {
+        link.addEventListener('click', function (event) {
+            event.preventDefault();
+            document.getElementById('compareSymbols').value = link.getAttribute('data-set');
+            document.getElementById('compareForm').submit();
+        });
+    });
+
+    function addCompared(symbol) {
+        window.StockPredictorAPI.post('/api/watchlist/add', {symbol: symbol})
+            .then(function (data) {
+                if (data.success) showToast(data.message, 'success');
+                else showToast(data.message, 'warning');
+            })
+            .catch(function (err) { showToast(err.message, 'error'); });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}User Management — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>👥 User Management</h1>
+    <span class="pill pill-blue">{{ users|length }} accounts</span>
+</div>
+<p class="subtitle">Unlock accounts, change roles, and reset passwords</p>
+
+<section class="card">
+    {% if users %}
+        <div class="table-wrap">
+            <table class="stock-table">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Last Login</th>
+                        <th>Logins</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                        <tr id="user-{{ user.email }}">
+                            <td>{{ user.email }}</td>
+                            <td>
+                                <span class="pill {{ 'pill-purple' if user.role == 'admin' else 'pill-neutral' }}">{{ user.role }}</span>
+                            </td>
+                            <td class="mono">{{ user.last_login or '—' }}</td>
+                            <td>{{ user.login_count }}</td>
+                            <td>
+                                {% if user.locked_until %}
+                                    <span class="pill pill-red">locked</span>
+                                {% else %}
+                                    <span class="pill pill-green">active</span>
+                                {% endif %}
+                            </td>
+                            <td class="admin-actions">
+                                {% if user.locked_until %}
+                                    <form method="POST" action="{{ url_for('admin.unlock_user', email=user.email) }}" class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-success btn-sm">Unlock</button>
+                                    </form>
+                                {% endif %}
+                                {% if user.email != current_user.email %}
+                                    <form method="POST" action="{{ url_for('admin.set_role', email=user.email) }}" class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <select name="role" onchange="this.form.submit()">
+                                            <option value="user" {{ 'selected' if user.role == 'user' else '' }}>user</option>
+                                            <option value="admin" {{ 'selected' if user.role == 'admin' else '' }}>admin</option>
+                                        </select>
+                                    </form>
+                                {% endif %}
+                                <form method="POST" action="{{ url_for('admin.set_password', email=user.email) }}" class="inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="password" name="password" placeholder="New password"
+                                           minlength="8" required>
+                                    <button type="submit" class="btn btn-outline btn-sm">Reset pwd</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="muted">No registered users yet.</p>
+    {% endif %}
+</section>
+{% endblock %}

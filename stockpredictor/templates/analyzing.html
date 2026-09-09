@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Analyzing {{ symbol }} — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="auth-card analyzing-card" data-job-id="{{ job_id }}">
+    <div class="analyzing-spinner" aria-hidden="true">
+        <div class="spinner-ring"></div>
+        <div class="spinner-emoji">🔮</div>
+    </div>
+    <h1>Analyzing {{ symbol }}</h1>
+    <p class="subtitle">Fetching market data, training the AI model and scoring sentiment…</p>
+    <p class="field-hint" id="jobMessage" data-job-endpoint="{{ url_for('analyze.job_status', job_id=job_id) }}"
+       data-result-url="{{ url_for('analyze.results_page', job_id=job_id) }}">
+        Queued — this usually takes under a minute.
+    </p>
+
+    <div class="progress-track" id="jobProgress">
+        <div class="progress-fill" id="jobProgressFill"></div>
+    </div>
+
+    <div class="quick-links" style="margin-top:18px;">
+        <a href="{{ url_for(error_endpoint) }}">← Cancel and try a different symbol</a>
+    </div>
+</div>
+{% endblock %}

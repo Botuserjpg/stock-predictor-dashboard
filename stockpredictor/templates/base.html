@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="theme-color" content="#0a0f1e">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📈%3C/text%3E%3C/svg%3E">
+    <!-- Blocking tiny script: applies saved theme/accent before paint (no FOUC).
+         External file so Content-Security-Policy script-src 'self' stays valid. -->
+    <script src="{{ url_for('static', filename='js/theme-init.js') }}"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+    <title>{% block title %}{{ app_name }}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body data-authenticated="{{ 'true' if current_user.is_authenticated else 'false' }}">
+<a class="skip-link" href="#main">Skip to main content</a>
+{% set active_ns = request.endpoint.split('.')[0] if request.endpoint else '' %}
+
+<nav class="topnav">
+    <a class="brand" href="{{ url_for('dashboard.home') }}">
+        <span class="brand-mark">📈</span> {{ app_name }}
+    </a>
+
+    <button class="hamburger" id="navToggle" aria-label="Toggle navigation" aria-expanded="false">
+        <span></span><span></span><span></span>
+    </button>
+
+    <div class="nav-links" id="navLinks">
+        {% if current_user.is_authenticated %}
+            <a href="{{ url_for('dashboard.home') }}" class="{{ 'active' if active_ns == 'dashboard' else '' }}">Dashboard</a>
+            <a href="{{ url_for('analyze.analyze_stock') }}" class="{{ 'active' if active_ns == 'analyze' and request.endpoint == 'analyze.analyze_stock' else '' }}">Analyze</a>
+            <a href="{{ url_for('analyze.analyze_any_stock') }}" class="{{ 'active' if request.endpoint == 'analyze.analyze_any_stock' else '' }}">Global</a>
+            <a href="{{ url_for('compare.page') }}" class="{{ 'active' if active_ns == 'compare' else '' }}">Compare</a>
+            <a href="{{ url_for('analytics.page') }}" class="{{ 'active' if active_ns == 'analytics' else '' }}">Analytics</a>
+            <a href="{{ url_for('watchlist.page') }}" class="{{ 'active' if active_ns == 'watchlist' else '' }}">Watchlist</a>
+            <a href="{{ url_for('portfolio.page') }}" class="{{ 'active' if active_ns == 'portfolio' else '' }}">Portfolio</a>
+            {% if current_user.is_admin %}
+                <a href="{{ url_for('admin.index') }}" class="{{ 'active' if active_ns == 'admin' else '' }}">Admin</a>
+            {% endif %}
+            <span class="nav-user">👤 {{ current_user.email }}</span>
+            <div class="nav-actions">
+                <div class="accent-picker" id="accentPicker">
+                    <div class="accent-swatches" id="accentSwatches" hidden>
+                        <button type="button" class="accent-swatch" data-accent="blue" title="Blue" style="background:linear-gradient(135deg,#38bdf8,#818cf8)"></button>
+                        <button type="button" class="accent-swatch" data-accent="violet" title="Violet" style="background:linear-gradient(135deg,#a78bfa,#f472b6)"></button>
+                        <button type="button" class="accent-swatch" data-accent="indigo" title="Indigo" style="background:linear-gradient(135deg,#818cf8,#c084fc)"></button>
+                        <button type="button" class="accent-swatch" data-accent="teal" title="Teal" style="background:linear-gradient(135deg,#2dd4bf,#38bdf8)"></button>
+                        <button type="button" class="accent-swatch" data-accent="gold" title="Gold" style="background:linear-gradient(135deg,#f5c542,#fb923c)"></button>
+                        <button type="button" class="accent-swatch" data-accent="rose" title="Rose" style="background:linear-gradient(135deg,#fb7185,#f472b6)"></button>
+                    </div>
+                    <button type="button" class="accent-toggle" id="accentToggle" aria-label="Change accent color" title="Accent color"><span class="accent-dot"></span></button>
+                </div>
+                <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle color theme">🌙</button>
+                <a href="{{ url_for('auth.account') }}">Account</a>
+                <a href="{{ url_for('auth.logout') }}">Logout</a>
+            </div>
+        {% else %}
+            {% if config.get('PUBLIC_DEMO') %}
+                <a href="{{ url_for('dashboard.demo') }}" class="{{ 'active' if request.endpoint == 'dashboard.demo' else '' }}">Live Demo</a>
+            {% endif %}
+            <a href="{{ url_for('auth.login') }}" class="{{ 'active' if request.endpoint == 'auth.login' else '' }}">Login</a>
+            <a href="{{ url_for('auth.register') }}" class="{{ 'active' if request.endpoint == 'auth.register' else '' }}">Register</a>
+            <div class="nav-actions">
+                <div class="accent-picker" id="accentPicker">
+                    <div class="accent-swatches" id="accentSwatches" hidden>
+                        <button type="button" class="accent-swatch" data-accent="blue" title="Blue" style="background:linear-gradient(135deg,#38bdf8,#818cf8)"></button>
+                        <button type="button" class="accent-swatch" data-accent="violet" title="Violet" style="background:linear-gradient(135deg,#a78bfa,#f472b6)"></button>
+                        <button type="button" class="accent-swatch" data-accent="indigo" title="Indigo" style="background:linear-gradient(135deg,#818cf8,#c084fc)"></button>
+                        <button type="button" class="accent-swatch" data-accent="teal" title="Teal" style="background:linear-gradient(135deg,#2dd4bf,#38bdf8)"></button>
+                        <button type="button" class="accent-swatch" data-accent="gold" title="Gold" style="background:linear-gradient(135deg,#f5c542,#fb923c)"></button>
+                        <button type="button" class="accent-swatch" data-accent="rose" title="Rose" style="background:linear-gradient(135deg,#fb7185,#f472b6)"></button>
+                    </div>
+                    <button type="button" class="accent-toggle" id="accentToggle" aria-label="Change accent color" title="Accent color"><span class="accent-dot"></span></button>
+                </div>
+                <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle color theme">🌙</button>
+            </div>
+        {% endif %}
+    </div>
+</nav>
+
+{% if current_user.is_authenticated %}
+<div class="ticker-bar" id="tickerBar" aria-hidden="true">
+    <div class="ticker-track" id="tickerTrack"></div>
+</div>
+{% endif %}
+
+<main class="container" id="main">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-area" role="status" aria-live="polite">
+                {% for category, message in messages %}
+                    <div class="flash flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+</main>
+
+<footer class="footer">
+    <div>
+        <span class="status-dot"></span>{{ app_name }} — AI-powered market intelligence for research &amp; education only. Not financial advice.
+    </div>
+    <div style="margin-top:4px; opacity:0.7;">Data: Yahoo Finance · NewsAPI · Finnhub · sentiment-weighted LSTM/GRU ensembles</div>
+</footer>
+
+<div class="modal-backdrop" id="modalBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <button type="button" class="modal-close" id="modalClose" aria-label="Close dialog">×</button>
+        <h3 class="modal-title" id="modalTitle"></h3>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-actions" id="modalActions"></div>
+    </div>
+</div>
+
+<div class="toast-stack" id="toastStack" role="status" aria-live="polite" aria-atomic="false"></div>
+<button class="back-to-top" id="backToTop" aria-label="Back to top">↑</button>
+
+<script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

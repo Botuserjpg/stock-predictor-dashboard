@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint (error-class checks on maintained code)
+        run: >
+          ruff check stockpredictor production_core.py wsgi.py gunicorn.conf.py tests
+          --select E9,F63,F7,F82,F811,F401
+          --exclude stockpredictor/static
+
+      - name: Run test suite
+        env:
+          # keep the suite offline/deterministic
+          SMTP_HOST: ""
+          SMTP_USER: ""
+        run: |
+          coverage run --source=stockpredictor,production_core -m unittest discover -v
+          coverage report --fail_under=55
+
+      - name: Streamlit entry-point smoke test
+        # Guard the Streamlit Cloud deploy path: verify the modules the
+        # dashboard imports resolve and the scripts compile, without needing
+        # a live Streamlit runtime.
+        run: |
+          python -c "import predictor_core, model_utils, config, sentiment_analysis; print('streamlit deps import OK')"
+          python -m py_compile app_streamlit.py predict.py config.py sentiment_analysis.py
+          echo "streamlit smoke OK"
+
+  security-audit:
+    runs-on: ubuntu-latest
+    continue-on-error: true   # tighten to required once H-06 dependency bumps complete
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - name: Install audit tool
+        run: python -m pip install pip-audit==2.7.3
+      - name: Dependency vulnerability scan
+        run: pip-audit -r requirements.txt
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t stock-predictor-pro:ci .
+      - name: Smoke-run healthcheck
+        run: |
+          docker run -d --name smoke -p 5000:5000 \
+            -e SECRET_KEY=ci-secret -e FLASK_ENV=production stock-predictor-pro:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5000/health > /dev/null; then echo "healthy"; exit 0; fi
+            sleep 2
+          done
+          echo "container failed health check" && docker logs smoke && exit 1

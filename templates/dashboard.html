@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Predictor Pro - Enhanced Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --info-color: #17a2b8;
+            --dark-color: #343a40;
+            --light-color: #f8f9fa;
+        }
+        .live-badge {
+    background: var(--success-color);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7em;
+    font-weight: bold;
+}
+
+.cached-badge {
+    background: var(--warning-color);
+    color: var(--dark-color);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7em;
+    font-weight: bold;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: bold;
+}
+
+.badge.positive {
+    background: var(--success-color);
+    color: white;
+}
+
+.badge.warning {
+    background: var(--warning-color);
+    color: var(--dark-color);
+}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header { 
+            background: rgba(255, 255, 255, 0.95); 
+            padding: 25px; 
+            border-radius: 15px; 
+            margin-bottom: 25px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .header h1 {
+            font-size: 2.2em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        
+        .user-info {
+            text-align: right;
+        }
+        
+        .nav { 
+            display: flex; 
+            gap: 15px; 
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        
+        .nav a { 
+            padding: 12px 20px; 
+            text-decoration: none; 
+            border-radius: 8px; 
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-primary { background: var(--primary-color); color: white; }
+        .nav-success { background: var(--success-color); color: white; }
+        .nav-secondary { background: var(--dark-color); color: white; }
+        
+        .nav a:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        
+        .card { 
+            background: rgba(255, 255, 255, 0.95); 
+            padding: 25px; 
+            border-radius: 15px; 
+            margin-bottom: 25px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .card h2 {
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            color: var(--dark-color);
+            border-bottom: 2px solid var(--light-color);
+            padding-bottom: 10px;
+        }
+        
+        .metrics-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+            gap: 20px; 
+            margin-bottom: 25px; 
+        }
+        
+        .metric-card { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px; 
+            border-radius: 12px; 
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+            transform: translateX(-100%);
+            transition: transform 0.6s;
+        }
+        
+        .metric-card:hover::before {
+            transform: translateX(100%);
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+        }
+        
+        .positive { color: var(--success-color); }
+        .negative { color: var(--danger-color); }
+        .warning { color: var(--warning-color); }
+        
+        .portfolio-section {
+            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin: 25px 0;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            margin: 5px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+        }
+        
+        .btn-success { background: var(--success-color); color: white; }
+        .btn-primary { background: var(--primary-color); color: white; }
+        .btn-danger { background: var(--danger-color); color: white; }
+        .btn-warning { background: var(--warning-color); color: var(--dark-color); }
+        .btn-secondary { background: var(--dark-color); color: white; }
+        
+        .universal-search {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .search-form {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .search-input {
+            flex: 1;
+            min-width: 250px;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .search-input:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+        }
+        
+        .quick-symbols {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        
+        .symbol-chip {
+            padding: 8px 16px;
+            background: var(--light-color);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .symbol-chip:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: translateY(-2px);
+        }
+        
+        .portfolio-quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .quick-action {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .quick-action:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+        }
+        
+        .watchlist {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .watchlist-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+        
+        .watchlist-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .watchlist-item:last-child {
+            border-bottom: none;
+        }
+        
+        .chart-container {
+            height: 300px;
+            margin-top: 20px;
+        }
+        
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+        }
+        
+        @media (max-width: 768px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .user-info {
+                text-align: center;
+                margin-top: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div>
+                <h1>🚀 Stock Predictor Pro</h1>
+                <p>Advanced AI-Powered Stock Analysis & Portfolio Management</p>
+            </div>
+            <div class="user-info">
+                <p>Welcome, <strong>{{ username }}</strong>!</p>
+                <p>Last login: {{ last_login }}</p>
+                <a href="/logout" class="btn btn-secondary">Logout</a>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <a href="/dashboard" class="nav-primary">📊 Dashboard</a>
+            <a href="/analyze_any" class="nav-success">🔍 Analyze Any Stock</a>
+            <a href="/portfolio" class="nav-secondary">💰 Portfolio</a>
+            <a href="/watchlist" class="nav-primary">⭐ Watchlist</a>
+            <a href="/market/overview" class="nav-secondary">📈 Market Overview</a>
+        </div>
+
+        <!-- Universal Symbol Search -->
+        <div class="universal-search">
+            <h2>🌍 Universal Stock Analysis</h2>
+            <p>Enter any stock symbol from worldwide exchanges</p>
+            <form class="search-form" id="universalSearchForm">
+                <input type="text" class="search-input" id="symbolInput" 
+                       placeholder="Enter any stock symbol (e.g., AAPL, TSLA, SHOP.TO, HSBA.L, RELIANCE.NS)" 
+                       required>
+                <select class="search-input" id="modelType" style="max-width: 200px;">
+                    <option value="AUTO">Auto-Select Model</option>
+                    <option value="LSTM">LSTM Neural Network</option>
+                    <option value="GRU">GRU Neural Network</option>
+                    <option value="ENSEMBLE">Ensemble Model</option>
+                </select>
+                <button type="submit" class="btn btn-primary">🚀 Analyze Stock</button>
+            </form>
+            
+            <div class="quick-symbols">
+                <div class="symbol-chip" data-symbol="AAPL">AAPL</div>
+                <div class="symbol-chip" data-symbol="TSLA">TSLA</div>
+                <div class="symbol-chip" data-symbol="MSFT">MSFT</div>
+                <div class="symbol-chip" data-symbol="GOOGL">GOOGL</div>
+                <div class="symbol-chip" data-symbol="NVDA">NVDA</div>
+                <div class="symbol-chip" data-symbol="SHOP.TO">SHOP.TO</div>
+                <div class="symbol-chip" data-symbol="HSBA.L">HSBA.L</div>
+                <div class="symbol-chip" data-symbol="RELIANCE.NS">RELIANCE.NS</div>
+            </div>
+            
+            <div id="quickResults" style="margin-top: 20px;"></div>
+        </div>
+
+        <!-- Market Indices Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <h4>Live Market Indices</h4>
+        <div class="row">
+            {% for symbol, data in market_data.items() %}
+            <div class="col-md-3 col-6 mb-3">
+                <div class="card index-card {% if data.change >= 0 %}border-success{% else %}border-danger{% endif %}">
+                    <div class="card-body p-3">
+                        <h6 class="card-title mb-1">{{ data.name }}</h6>
+                        <h5 class="card-text mb-1">${{ data.price if data.price != 'Updating...' else data.price }}</h5>
+                        <small class="{% if data.change >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            {{ "+" if data.change >= 0 else "" }}{{ data.change }} ({{ "+" if data.change_pct >= 0 else "" }}{{ data.change_pct }}%)
+                        </small>
+                        <br>
+                        <small class="text-muted">Updated: {{ data.timestamp }}</small>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+        <!-- Portfolio Summary -->
+        <div class="portfolio-section">
+            <h2>💰 Portfolio Overview</h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div>Total Value</div>
+                    <div style="font-size: 2em; font-weight: bold;">${{ portfolio.total_value | default(0) | round(2) }}</div>
+                    <div class="{{ 'positive' if portfolio.daily_change >= 0 else 'negative' }}">
+                        {{ "%+.2f"|format(portfolio.daily_change | default(0)) }}%
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div>Cash Balance</div>
+                    <div style="font-size: 2em; font-weight: bold;">${{ portfolio.cash_balance | default(0) | round(2) }}</div>
+                    <div>Available to invest</div>
+                </div>
+                <div class="metric-card">
+                    <div>Total Return</div>
+                    <div style="font-size: 2em; font-weight: bold;" 
+                         class="{{ 'positive' if portfolio.total_return >= 0 else 'negative' }}">
+                        {{ "%+.2f"|format(portfolio.total_return | default(0)) }}%
+                    </div>
+                    <div>All Time</div>
+                </div>
+                <div class="metric-card">
+                    <div>Holdings</div>
+                    <div style="font-size: 2em; font-weight: bold;">{{ portfolio.holdings_count | default(0) }}</div>
+                    <div>Diversified</div>
+                </div>
+            </div>
+            
+            <div class="portfolio-quick-actions">
+                <div class="quick-action">
+                    <h4>Add Funds</h4>
+                    <button class="btn btn-success">💵 Add Money</button>
+                </div>
+                <div class="quick-action">
+                    <h4>Trade Stocks</h4>
+                    <a href="/analyze_any" class="btn btn-primary">📈 Find Opportunities</a>
+                </div>
+                <div class="quick-action">
+                    <h4>Portfolio Report</h4>
+                    <button class="btn btn-secondary">📊 Generate Report</button>
+                </div>
+                <div class="quick-action">
+                    <h4>Rebalance</h4>
+                    <button class="btn btn-warning">⚖️ Rebalance Portfolio</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <!-- Market Overview -->
+            <!-- Market Overview -->
+<div class="card">
+    <h2>📈 Market Overview</h2>
+    <div id="marketMetrics" class="metrics-grid">
+        <!-- Dynamic market metrics from backend -->
+        {% for symbol, data in indices_data.items() %}
+        <div class="metric-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <div>{{ data.name }}</div>
+                <span class="badge {{ 'live-badge' if data.source == 'live' else 'cached-badge' }}">
+                    {{ data.source.upper() }}
+                </span>
+            </div>
+            <div style="font-size: 1.5em; font-weight: bold;">${{ "%.2f"|format(data.price) }}</div>
+            <div class="{{ 'positive' if data.change_pct >= 0 else 'negative' }}">
+                {{ "%+.2f"|format(data.change_pct) }}%
+            </div>
+            <div style="font-size: 0.8em; margin-top: 5px; color: rgba(255,255,255,0.8);">
+                {{ data.timestamp }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="chart-container">
+        <canvas id="marketChart"></canvas>
+    </div>
+</div>
+
+<!-- Popular Stocks -->
+<div class="card">
+    <h2>📊 Popular Stocks</h2>
+    <div class="watchlist">
+        {% for symbol, data in stock_data.items() %}
+        <div class="watchlist-item">
+            <div>
+                <strong>{{ symbol }}</strong>
+                <div style="font-size: 0.9em; color: #6c757d;">{{ data.name }}</div>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-weight: bold;">${{ "%.2f"|format(data.price) }}</div>
+                <div class="{{ 'positive' if data.change_pct >= 0 else 'negative' }}" style="font-size: 0.9em;">
+                    {{ "%+.2f"|format(data.change_pct) }}%
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- System Status in Header -->
+<div class="header">
+    <div>
+        <h1>🚀 Stock Predictor Pro</h1>
+        <p>Advanced AI-Powered Stock Analysis & Portfolio Management</p>
+        <div style="display: flex; gap: 15px; margin-top: 10px; font-size: 0.9em;">
+            <span class="badge positive">AI: {{ predictor_status }}</span>
+            <span class="badge {{ 'positive' if data_status.startswith('✅') else 'warning' }}">
+                Data: {{ data_status }}
+            </span>
+        </div>
+    </div>
+    <div class="user-info">
+        <p>Welcome, <strong>{{ username }}</strong>!</p>
+        <p>Last login: {{ last_login }}</p>
+        <a href="/logout" class="btn btn-secondary">Logout</a>
+    </div>
+</div>
+            <!-- Watchlist -->
+            <div class="card">
+                <h2>⭐ Your Watchlist</h2>
+                <div class="watchlist">
+                    {% if watchlist and watchlist|length > 0 %}
+                        {% for item in watchlist %}
+                        <div class="watchlist-item">
+                            <div>
+                                <strong>{{ item.symbol }}</strong>
+                                <div style="font-size: 0.9em; color: #6c757d;">{{ item.company_name }}</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-weight: bold;">${{ "%.2f"|format(item.current_price or 0) }}</div>
+                                <div class="{{ 'positive' if (item.price_change or 0) >= 0 else 'negative' }}" style="font-size: 0.9em;">
+                                    {{ "%+.2f"|format(item.price_change or 0) }}%
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div style="padding: 30px; text-align: center; color: #6c757d;">
+                            <p>Your watchlist is empty</p>
+                            <p>Add stocks to track them here</p>
+                            <a href="/analyze_any" class="btn btn-primary" style="margin-top: 10px;">Find Stocks to Watch</a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Trading Opportunities -->
+        <div class="card">
+            <h2>🎯 Top Trading Opportunities</h2>
+            <div id="tradingOpportunities">
+                <!-- Trading opportunities will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Sector Performance -->
+        <div class="card">
+            <h2>🏢 Sector Performance</h2>
+            <div id="sectorChart" class="chart-container"></div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="card">
+            <h2>📋 Recent Activity</h2>
+            <div id="recentActivity">
+                <!-- Recent activity will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadMarketOverview();
+            loadTradingOpportunities();
+            loadRecentActivity();
+            initializeCharts();
+        });
+
+        // Universal search form handler
+        document.getElementById('universalSearchForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const symbol = document.getElementById('symbolInput').value.trim().toUpperCase();
+            const modelType = document.getElementById('modelType').value;
+            
+            if (!symbol) {
+                alert('Please enter a stock symbol');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/validate_symbol', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ symbol: symbol })
+                });
+                
+                const validation = await response.json();
+                
+                if (!validation.valid) {
+                    document.getElementById('quickResults').innerHTML = `
+                        <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px;">
+                            <strong>❌ Invalid Symbol:</strong> ${symbol}
+                            <p>${validation.error || 'Please check the symbol and try again.'}</p>
+                            <p><strong>Tips:</strong> Include exchange suffix if needed (e.g., .TO for Toronto, .L for London)</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Redirect to analysis page
+                window.location.href = `/analyze?symbol=${symbol}&model_type=${modelType}`;
+                
+            } catch (error) {
+                document.getElementById('quickResults').innerHTML = `
+                    <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px;">
+                        <strong>❌ Error:</strong> Could not validate symbol ${symbol}
+                    </div>
+                `;
+            }
+        });
+
+        // Quick symbol chips
+        document.querySelectorAll('.symbol-chip').forEach(chip => {
+            chip.addEventListener('click', function() {
+                document.getElementById('symbolInput').value = this.getAttribute('data-symbol');
+                document.getElementById('universalSearchForm').dispatchEvent(new Event('submit'));
+            });
+        });
+
+        // Load market overview
+       // Enhanced market overview loading
+// In your dashboard.html, update the market metrics loading:
+async function loadMarketOverview() {
+    try {
+        const response = await fetch('/api/market/overview');
+        const marketData = await response.json();
+        
+        if (marketData.status === 'success' || marketData.indices) {
+            const indices = marketData.indices;
+            
+            document.getElementById('marketMetrics').innerHTML = `
+                ${Object.keys(indices).map(symbol => {
+                    const data = indices[symbol];
+                    const changeClass = data.change_percent >= 0 ? 'positive' : 'negative';
+                    const changeIcon = data.change_percent >= 0 ? '📈' : '📉';
+                    const sourceBadge = data.source === 'LIVE' ? 
+                        '<span class="live-badge">LIVE</span>' : 
+                        data.source === 'ETF' ? '<span class="etf-badge">ETF</span>' : 
+                        '<span class="error-badge">ERROR</span>';
+                    
+                    // Format large numbers with commas
+                    const formattedPrice = data.price.toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    });
+                    
+                    return `
+                    <div class="metric-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <div>${data.name}</div>
+                            ${sourceBadge}
+                        </div>
+                        <div style="font-size: 1.3em; font-weight: bold; color: #333;">${formattedPrice}</div>
+                        <div class="${changeClass}" style="font-size: 1em;">
+                            ${changeIcon} ${data.change >= 0 ? '+' : ''}${data.change.toFixed(2)} 
+                            (${data.change_percent >= 0 ? '+' : ''}${data.change_percent.toFixed(2)}%)
+                        </div>
+                        <div style="font-size: 0.7em; margin-top: 5px; color: rgba(255,255,255,0.8);">
+                            ${data.timestamp}
+                        </div>
+                    </div>
+                    `;
+                }).join('')}
+            `;
+        }
+        
+    } catch (error) {
+        console.error('Error loading market overview:', error);
+        document.getElementById('marketMetrics').innerHTML = `
+            <div class="metric-card" style="grid-column: 1 / -1; text-align: center;">
+                <div>⚠️ Live Market Data Unavailable</div>
+                <div style="font-size: 0.9em; margin-top: 10px;">
+                    Please check your internet connection
+                </div>
+            </div>
+        `;
+    }
+}
+
+// Market sentiment indicator
+function updateMarketSentiment(sentiment) {
+    const sentimentColors = {
+        'BULLISH': 'var(--success-color)',
+        'BEARISH': 'var(--danger-color)', 
+        'NEUTRAL': 'var(--warning-color)'
+    };
+    
+    const sentimentIcons = {
+        'BULLISH': '🚀',
+        'BEARISH': '⚠️',
+        'NEUTRAL': '⚖️'
+    };
+    
+    // Add sentiment indicator to header
+    let sentimentElement = document.getElementById('market-sentiment');
+    if (!sentimentElement) {
+        sentimentElement = document.createElement('div');
+        sentimentElement.id = 'market-sentiment';
+        sentimentElement.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${sentimentColors[sentiment]};
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        `;
+        document.body.appendChild(sentimentElement);
+    }
+    
+    sentimentElement.innerHTML = `
+        ${sentimentIcons[sentiment]} Market: ${sentiment}
+        <small style="opacity: 0.9;">| Updated: ${new Date().toLocaleTimeString()}</small>
+    `;
+    sentimentElement.style.background = sentimentColors[sentiment];
+}
+
+// Enhanced auto-refresh with exponential backoff
+let refreshCount = 0;
+const MAX_REFRESH_COUNT = 10;
+
+function startAutoRefresh() {
+    // Initial load
+    loadMarketOverview();
+    loadTradingOpportunities();
+    loadRecentActivity();
+    
+    // Set up interval with progressive timing
+    setInterval(() => {
+        refreshCount++;
+        
+        // Refresh more frequently during market hours (9:30 AM - 4:00 PM ET)
+        const now = new Date();
+        const hours = now.getHours();
+        const isMarketHours = (hours >= 9 && hours < 16);
+        
+        const refreshInterval = isMarketHours ? 30000 : 120000; // 30s vs 2m
+        
+        if (refreshCount % (refreshInterval / 30000) === 0) {
+            loadMarketOverview();
+        }
+        if (refreshCount % 2 === 0) { // Every 2 cycles
+            loadTradingOpportunities();
+        }
+        if (refreshCount % 3 === 0) { // Every 3 cycles  
+            loadRecentActivity();
+        }
+        
+    }, 30000); // Check every 30 seconds
+}
+
+// Initialize with enhanced error handling
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        startAutoRefresh();
+        initializeCharts();
+        
+        // Add CSS for badges
+        const style = document.createElement('style');
+        style.textContent = `
+            .live-badge {
+                background: var(--success-color);
+                color: white;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 0.7em;
+                font-weight: bold;
+            }
+            .daily-badge {
+                background: var(--warning-color);
+                color: var(--dark-color);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 0.7em;
+                font-weight: bold;
+            }
+            .cached-badge {
+                background: var(--secondary-color);
+                color: white;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 0.7em;
+                font-weight: bold;
+            }
+        `;
+        document.head.appendChild(style);
+        
+    } catch (error) {
+        console.error('Error initializing dashboard:', error);
+    }
+});
+
+        // Load trading opportunities
+        async function loadTradingOpportunities() {
+            try {
+                const response = await fetch('/api/trading/opportunities');
+                const opportunities = await response.json();
+                
+                let opportunitiesHTML = '';
+                
+                if (opportunities && opportunities.length > 0) {
+                    opportunities.slice(0, 5).forEach(opp => {
+                        opportunitiesHTML += `
+                            <div class="watchlist-item">
+                                <div>
+                                    <strong>${opp.symbol}</strong>
+                                    <div style="font-size: 0.9em; color: #6c757d;">${opp.company_name}</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-weight: bold;">$${opp.current_price?.toFixed(2) || '0.00'}</div>
+                                    <div class="${opp.expected_return >= 0 ? 'positive' : 'negative'}" style="font-size: 0.9em;">
+                                        ${opp.expected_return >= 0 ? '+' : ''}${opp.expected_return?.toFixed(2) || '0.00'}%
+                                    </div>
+                                    <div style="font-size: 0.8em; margin-top: 5px;">
+                                        <span class="badge ${opp.signal === 'STRONG_BUY' ? 'positive' : opp.signal === 'BUY' ? 'positive' : 'negative'}">
+                                            ${opp.signal}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    opportunitiesHTML = `
+                        <div style="padding: 30px; text-align: center; color: #6c757d;">
+                            <p>No strong trading opportunities detected at the moment</p>
+                            <p>Check back later or analyze specific stocks</p>
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('tradingOpportunities').innerHTML = opportunitiesHTML;
+                
+            } catch (error) {
+                console.error('Error loading trading opportunities:', error);
+                document.getElementById('tradingOpportunities').innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #6c757d;">
+                        Trading opportunities temporarily unavailable
+                    </div>
+                `;
+            }
+        }
+
+// Auto-refresh market data every 60 seconds
+function refreshMarketData() {
+    fetch('/api/market_data')
+        .then(response => response.json())
+        .then(data => {
+            // Update each index card
+            Object.keys(data).forEach(symbol => {
+                const element = document.getElementById(`index-${symbol}`);
+                if (element) {
+                    element.innerHTML = `
+                        <h6 class="card-title mb-1">${data[symbol].name}</h6>
+                        <h5 class="card-text mb-1">$${data[symbol].price}</h5>
+                        <small class="${data[symbol].change >= 0 ? 'text-success' : 'text-danger'}">
+                            ${data[symbol].change >= 0 ? '+' : ''}${data[symbol].change} 
+                            (${data[symbol].change >= 0 ? '+' : ''}${data[symbol].change_pct}%)
+                        </small>
+                        <br>
+                        <small class="text-muted">Updated: ${data[symbol].timestamp}</small>
+                    `;
+                }
+            });
+        })
+        .catch(error => console.error('Error refreshing market data:', error));
+}
+
+// Refresh every 60 seconds
+setInterval(refreshMarketData, 60000);
+
+        // Load recent activity
+        async function loadRecentActivity() {
+            try {
+                const response = await fetch('/api/portfolio/transaction_history');
+                const transactions = await response.json();
+                
+                let activityHTML = '';
+                
+                if (transactions && transactions.length > 0) {
+                    transactions.slice(0, 5).forEach(tx => {
+                        activityHTML += `
+                            <div class="watchlist-item">
+                                <div>
+                                    <strong>${tx.symbol}</strong>
+                                    <div style="font-size: 0.9em; color: #6c757d;">
+                                        ${tx.type} • ${tx.quantity} shares
+                                    </div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-weight: bold;">$${tx.total?.toFixed(2) || '0.00'}</div>
+                                    <div style="font-size: 0.9em; color: #6c757d;">
+                                        ${new Date(tx.date).toLocaleDateString()}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    activityHTML = `
+                        <div style="padding: 30px; text-align: center; color: #6c757d;">
+                            <p>No recent activity</p>
+                            <p>Your transactions will appear here</p>
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('recentActivity').innerHTML = activityHTML;
+                
+            } catch (error) {
+                console.error('Error loading recent activity:', error);
+                document.getElementById('recentActivity').innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #6c757d;">
+                        Recent activity temporarily unavailable
+                    </div>
+                `;
+            }
+        }
+
+        // Initialize charts
+        function initializeCharts() {
+            // Market chart
+            const marketCtx = document.getElementById('marketChart').getContext('2d');
+            new Chart(marketCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Portfolio Value',
+                        data: [10000, 10500, 11000, 11500, 12000, 12500],
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false
+                        }
+                    }
+                }
+            });
+            
+            // Sector performance chart
+            fetch('/api/sector_performance')
+                .then(response => response.json())
+                .then(sectorData => {
+                    const sectors = Object.keys(sectorData);
+                    const returns = sectors.map(s => sectorData[s].avg_return);
+                    const trends = sectors.map(s => sectorData[s].trend);
+                    
+                    const trace = {
+                        x: sectors,
+                        y: returns,
+                        type: 'bar',
+                        marker: {
+                            color: trends.map(t => t === 'BULLISH' ? '#28a745' : t === 'BEARISH' ? '#dc3545' : '#ffc107')
+                        }
+                    };
+
+                    Plotly.newPlot('sectorChart', [trace], {
+                        title: 'Sector Performance (1Y Returns)',
+                        xaxis: { title: 'Sectors' },
+                        yaxis: { title: 'Return (%)' },
+                        margin: { t: 50, r: 30, b: 80, l: 60 }
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading sector performance:', error);
+                });
+        }
+
+        // Auto-refresh dashboard every 5 minutes
+        setInterval(() => {
+            loadMarketOverview();
+            loadTradingOpportunities();
+            loadRecentActivity();
+        }, 300000);
+    </script>
+</body>
+</html>

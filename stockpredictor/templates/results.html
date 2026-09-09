@@ -1,0 +1,546 @@
+{% extends "base.html" %}
+{% block title %}Results: {{ symbol }} — {{ app_name }}{% endblock %}
+{% block content %}
+{% set summary = (report.get('executive_summary') or {}) %}
+{% set currency = summary.get('currency_symbol', '$') %}
+{% set rec = (summary.get('investment_recommendation') or 'HOLD')|upper %}
+{% set rec_class = 'rec-buy' if rec == 'BUY' else ('rec-sell' if rec == 'SELL' else 'rec-hold') %}
+{% set rec_pill = 'pill-green' if rec == 'BUY' else ('pill-red' if rec == 'SELL' else 'pill-gold') %}
+
+<div class="page-header">
+    <h1>🔍 AI Analysis: {{ symbol }}</h1>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        {% set params = params or {} %}
+        <button class="btn btn-outline" id="watchlistBtn"
+                data-symbol="{{ symbol }}"
+                data-in-watchlist="{{ 'true' if in_watchlist else 'false' }}"
+                onclick="toggleWatchlist()">
+            {{ '⭐ In Watchlist' if in_watchlist else '☆ Add to Watchlist' }}
+        </button>
+        <a class="btn btn-outline"
+           href="{{ url_for('api.api_analysis_csv', symbol=symbol, period=params.get('period', '1y'), days=params.get('days', 30), model_type=params.get('model_type', 'AUTO')) }}">⬇️ Export CSV</a>
+        <button class="btn btn-outline" onclick="window.print()">🖨️ Print</button>
+        <a class="btn btn-secondary" href="{{ url_for('analyze.analyze_stock') }}">← Back</a>
+        <a class="btn btn-success" href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ symbol }}">🔄 Re-Analyze</a>
+    </div>
+</div>
+
+<div class="company-banner">
+    <div>
+        <h2>{{ summary.get('company_name', symbol) }} <span class="pill {{ rec_pill }}">{{ rec }}</span></h2>
+        <p>
+            Exchange: {{ summary.get('exchange', 'Unknown') }} ·
+            Analysis: {{ summary.get('analysis_date', '') }} ·
+            Model: {{ summary.get('model_used', 'AUTO') }}
+        </p>
+    </div>
+</div>
+
+{% if report.error %}
+    <div class="flash flash-error">Prediction failed: {{ report.error }}</div>
+{% endif %}
+
+<div class="rec-banner {{ rec_class }}">
+    <div>
+        <div class="rec-title">Investment Recommendation</div>
+        <div class="rec-label">{{ rec }}</div>
+    </div>
+    <div style="min-width: 220px; flex:1;">
+        <div class="rec-note" style="margin-bottom:8px;">
+            Confidence: {{ "%.0f" | format((summary.get('confidence_score', 0) or 0) * 100) }}%
+        </div>
+        <div class="confidence-bar">
+            <div class="confidence-fill" style="width: {{ (summary.get('confidence_score', 0) or 0) * 100 }}%;"></div>
+        </div>
+    </div>
+</div>
+
+<div class="grid">
+    <div class="metric-card">
+        <div class="metric-label">Current Price</div>
+        <div class="metric-value">{{ currency }}{{ "%.2f" | format(summary.get('current_price', 0)) }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Predicted Price</div>
+        <div class="metric-value {% if summary.get('expected_return', 0) >= 0 %}trend-up{% else %}trend-down{% endif %}">
+            {{ currency }}{{ "%.2f" | format(summary.get('predicted_price', 0)) }}
+        </div>
+        <div class="metric-change {% if summary.get('expected_return', 0) >= 0 %}trend-up{% else %}trend-down{% endif %}">
+            <span class="arrow">{{ '▲' if summary.get('expected_return', 0) >= 0 else '▼' }}</span>
+            {{ "%.2f" | format(summary.get('expected_return', 0)) }}%
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Risk Level</div>
+        <div class="metric-value">{{ summary.get('risk_level', 'MEDIUM') }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Recommendation</div>
+        <div class="metric-value">{{ summary.get('investment_recommendation', 'HOLD') }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">AI Model</div>
+        <div class="metric-value">{{ summary.get('model_used', 'AUTO') }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Confidence</div>
+        <div class="metric-value trend-up">{{ "%.0f" | format((summary.get('confidence_score', 0) or 0) * 100) }}%</div>
+    </div>
+</div>
+
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">📅</span> Forecast Trend</h2>
+        {% if report.forecast_rows %}
+            <span class="pill pill-blue">{{ report.forecast_rows|length }} points</span>
+        {% endif %}
+    </div>
+    {% if report.forecast_rows %}
+        <div class="chart-wrap" id="forecastChart" data-rows="{{ report.forecast_rows | tojson }}"></div>
+        {% if report.forecast_bands %}
+            <p class="field-hint">
+                <span class="chip">📊 {{ "%.0f" | format((report.forecast_bands.get('confidence') or 0.9) * 100) }}% confidence fan interval</span>
+                {% if report.forecast_bands.get('daily_volatility') %}
+                    <span class="chip">Daily volatility: {{ "%.2f" | format(report.forecast_bands.get('daily_volatility')) }}%</span>
+                {% endif %}
+                <span class="chip">Low / High columns show the band per forecast day.</span>
+            </p>
+        {% endif %}
+        <div class="table-wrap" style="margin-top:18px;">
+            <table class="stock-table">
+                <thead>
+                    <tr>
+                        {% for key in report.forecast_rows[0].keys() %}
+                            <th>{{ key }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report.forecast_rows %}
+                        <tr>
+                            {% for value in row.values() %}
+                                <td class="mono">{{ value }}</td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="muted">No forecast table available.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2><span class="card-emoji">📊</span> Technical Analysis</h2>
+    {% if technical %}
+        <div class="grid">
+            <div class="metric-card">
+                <div class="metric-label">RSI</div>
+                <div class="metric-value">{{ technical.get('rsi', '—') }}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Trend</div>
+                <div class="metric-value">{{ technical.get('trend', '—') }}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">MACD</div>
+                <div class="metric-value">{{ technical.get('macd_signal', '—') }}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Volatility</div>
+                <div class="metric-value">{{ technical.get('volatility_level', '—') }}</div>
+            </div>
+        </div>
+    {% else %}
+        <p class="muted">Technical analysis unavailable.</p>
+    {% endif %}
+</section>
+
+{% if regime %}
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">🌡️</span> Market Regime &amp; Model Selection</h2>
+        <span class="pill pill-blue">{{ regime | upper }}</span>
+    </div>
+    {% if model_selection %}
+        {% set ms = model_selection %}
+        <div class="grid">
+            <div class="metric-card">
+                <div class="metric-label">Regime</div>
+                <div class="metric-value">{{ (ms.get('regime') or regime) | upper }}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">ADX Strength</div>
+                <div class="metric-value">{{ "%.1f" | format(ms.get('adx_strength', 0)) }}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Annualized Volatility</div>
+                <div class="metric-value">{{ "%.1f" | format(ms.get('annualized_volatility', 0)) }}%</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Recommended Model</div>
+                <div class="metric-value">{{ ms.get('selected', 'AUTO') }}</div>
+            </div>
+        </div>
+        <p class="field-hint">{{ ms.get('rationale') }}</p>
+    {% endif %}
+</section>
+{% endif %}
+
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">🗞️</span> Sentiment</h2>
+        {% if sentiment and not sentiment.get('error') and sentiment.get('sources') %}
+            <span class="pill {{ 'pill-green' if sentiment.label == 'BULLISH' else ('pill-red' if sentiment.label == 'BEARISH' else 'pill-gold') }}">
+                {{ sentiment.get('sources')|length }} sources
+            </span>
+        {% endif %}
+    </div>
+    {% if sentiment and not sentiment.get('error') %}
+        <div class="grid">
+            <div class="metric-card">
+                <div class="metric-label">Score</div>
+                <div class="metric-value {% if sentiment.get('score', 0) >= 0 %}trend-up{% else %}trend-down{% endif %}">
+                    {{ "%.2f" | format(sentiment.get('score', 0)) }}
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Label</div>
+                <div class="metric-value">
+                    <span class="pill {{ 'pill-green' if sentiment.get('label') == 'BULLISH' else ('pill-red' if sentiment.get('label') == 'BEARISH' else 'pill-gold') }}">
+                        {{ sentiment.get('label', 'NEUTRAL') }}
+                    </span>
+                </div>
+            </div>
+        </div>
+        {% if sentiment.get('sources') %}
+            <div class="quick-links">
+                {% for source in sentiment.get('sources') %}
+                    <span class="chip">📡 {{ source }}</span>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% else %}
+        <p class="muted">Sentiment analysis unavailable.</p>
+    {% endif %}
+</section>
+
+<section class="card" id="analystReportCard" data-symbol="{{ symbol }}"
+         data-payload="{{ {'forecast': (report.get('executive_summary') or {}), 'technical': technical, 'sentiment': sentiment} | tojson }}">
+    <div class="card-header">
+        <h2><span class="card-emoji">🤖</span> AI Analyst Report</h2>
+        <button class="btn btn-outline" id="regenerateReportBtn" onclick="StockPredictorAPI.regenerateReport()">✨ Regenerate with AI</button>
+    </div>
+    <div id="analystReportBody" class="analyst-report">
+        {% if analyst_report and analyst_report.get('report') %}
+            <pre class="report-pre">{{ analyst_report.get('report') }}</pre>
+        {% else %}
+            <p class="muted">Report unavailable.</p>
+        {% endif %}
+    </div>
+</section>
+
+<section class="card" id="backtestCard" data-symbol="{{ symbol }}">
+    <div class="card-header">
+        <h2><span class="card-emoji">🕰️</span> Backtesting</h2>
+        <span class="pill pill-blue">MA crossover · walk-forward</span>
+    </div>
+    <div class="form-row" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px;">
+        <label>Strategy
+            <select id="btStrategy" class="input">
+                <option value="MA_CROSS" selected>MA Crossover</option>
+                <option value="MACD">MACD</option>
+                <option value="RSI">RSI Reversal</option>
+            </select>
+        </label>
+        <label>Fast <input type="number" id="btFast" class="input" value="20" min="2" max="120" style="width:80px;"></label>
+        <label>Slow <input type="number" id="btSlow" class="input" value="50" min="2" max="250" style="width:80px;"></label>
+        <button class="btn btn-success" id="runBacktestBtn" onclick="StockPredictorAPI.runBacktest()">▶ Run Backtest</button>
+    </div>
+    <div id="backtestPanel"><p class="muted">Run a backtest to evaluate the strategy on historical data.</p></div>
+</section>
+
+<section class="card" id="monteCarloCard" data-symbol="{{ symbol }}">
+    <div class="card-header">
+        <h2><span class="card-emoji">🎲</span> Monte Carlo Simulation</h2>
+        <span class="pill pill-blue">10,000 price paths</span>
+    </div>
+    <div class="form-row" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px;">
+        <label>Horizon (days) <input type="number" id="mcHorizon" class="input" value="30" min="1" max="250" style="width:90px;"></label>
+        <label>Target $ <input type="number" id="mcTarget" class="input" placeholder="optional" step="0.01" style="width:110px;"></label>
+        <label>Stop $ <input type="number" id="mcStop" class="input" placeholder="optional" step="0.01" style="width:110px;"></label>
+        <button class="btn btn-success" id="runMcBtn" onclick="StockPredictorAPI.runMonteCarlo()">▶ Simulate</button>
+    </div>
+    <div id="mcPanel"><p class="muted">Simulate forward price paths to see the 90% confidence band and target/stop probabilities.</p></div>
+</section>
+
+<section class="card" id="explainCard" data-symbol="{{ symbol }}">
+    <div class="card-header">
+        <h2><span class="card-emoji">🔬</span> Model Explainability</h2>
+        <span class="pill pill-blue">Feature importance</span>
+    </div>
+    <button class="btn btn-success" id="explainBtn" onclick="StockPredictorAPI.runExplain()">▶ Explain Forecast</button>
+    <div id="explainPanel" style="margin-top:14px;"><p class="muted">See which indicators are driving the model's prediction.</p></div>
+</section>
+
+{% if price_history %}
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">📈</span> Price History <span class="muted">({{ price_history|length }} trading days)</span></h2>
+        {% if summary.get('current_price') %}
+            <span class="chip">Latest: {{ currency }}{{ "%.2f" | format(summary.get('current_price')) }}</span>
+        {% endif %}
+    </div>
+    <div class="chart-wrap" id="priceChart" data-rows="{{ price_history | tojson }}"></div>
+</section>
+{% endif %}
+
+{% if fundamentals %}
+{% set info = fundamentals.get('company_info') or {} %}
+{% set scores = fundamentals.get('composite_scores') or {} %}
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">🏢</span> Company Fundamentals</h2>
+        {% if scores.get('rating') %}
+            {% set rating = scores.get('rating', 'HOLD') %}
+            <span class="pill {{ 'pill-green' if rating in ['BUY','STRONG_BUY'] else ('pill-red' if rating in ['SELL','STRONG_SELL'] else 'pill-gold') }}">
+                {{ rating }}
+            </span>
+        {% endif %}
+    </div>
+
+    {% if info.get('name') %}
+    <div class="profile-row">
+        <div class="profile-main">
+            <h3 class="profile-name">{{ info.get('name') }}
+                {% if info.get('exchange') and info.get('exchange') != 'Unknown' %}
+                    <span class="pill pill-neutral">{{ info.get('exchange') }}</span>
+                {% endif %}
+            </h3>
+            <p class="profile-meta muted">
+                {{ info.get('sector') or '—' }}{% if info.get('industry') and info.get('industry') != 'Unknown' %} · {{ info.get('industry') }}{% endif %}
+                {% if info.get('country') and info.get('country') != 'Unknown' %} · {{ info.get('country') }}{% endif %}
+            </p>
+            {% if info.get('description') %}
+                <p class="profile-desc">{{ info.get('description') | truncate(340) }}</p>
+            {% endif %}
+        </div>
+        <div class="profile-stats">
+            {% if info.get('market_cap') %}<div><span>Market Cap</span><b>{{ info.get('market_cap') | money }}</b></div>{% endif %}
+            {% if info.get('enterprise_value') %}<div><span>Enterprise Value</span><b>{{ info.get('enterprise_value') | money }}</b></div>{% endif %}
+            {% if info.get('employees') %}<div><span>Employees</span><b>{{ info.get('employees') | money }}</b></div>{% endif %}
+            <div><span>Currency</span><b>{{ info.get('currency') or '—' }}</b></div>
+            {% if info.get('ceo') %}<div><span>CEO</span><b>{{ info.get('ceo') }}</b></div>{% endif %}
+            {% if info.get('website') %}<div><span>Website</span><b><a href="{{ info.get('website') }}" target="_blank" rel="noopener">{{ info.get('website') | host }}</a></b></div>{% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if scores %}
+    <div class="score-grid">
+        {% for label, key in [('Valuation', 'valuation_score'), ('Profitability', 'profitability_score'), ('Growth', 'growth_score'), ('Analyst', 'analyst_score')] %}
+            <div class="score-item">
+                <span>{{ label }}</span>
+                <div class="score-bar"><div style="width: {{ scores.get(key) | default(0) | int }}%;"></div></div>
+                <b>{{ "%.0f" | format(scores.get(key) | default(0)) }}</b>
+            </div>
+        {% endfor %}
+        <div class="score-item score-total">
+            <span>Composite</span>
+            <b>{{ "%.0f" | format(scores.get('composite_score') | default(0)) }} / 100</b>
+            {% if scores.get('rating') %}<span class="pill {{ 'pill-green' if scores.get('rating') in ['BUY','STRONG_BUY'] else ('pill-red' if scores.get('rating') in ['SELL','STRONG_SELL'] else 'pill-gold') }}">{{ scores.get('rating') }}</span>{% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% set valuation = fundamentals.get('valuation_metrics') or {} %}
+    {% set profitability = fundamentals.get('profitability_metrics') or {} %}
+    {% set liquidity = fundamentals.get('liquidity_metrics') or {} %}
+    {% set efficiency = fundamentals.get('efficiency_metrics') or {} %}
+    {% set growth = fundamentals.get('growth_metrics') or {} %}
+    {% set ownership = fundamentals.get('ownership_data') or {} %}
+    {% set esg = fundamentals.get('esg_data') or {} %}
+    {% set analyst = fundamentals.get('analyst_data') or {} %}
+
+    <div class="fund-grid">
+        {% if valuation %}
+        <div class="fund-card">
+            <div class="fund-title">Valuation</div>
+            <div class="fund-row"><span>P/E Ratio</span><b>{{ valuation.get('pe_ratio') | fmt(1) }}</b></div>
+            <div class="fund-row"><span>Forward P/E</span><b>{{ valuation.get('forward_pe') | fmt(1) }}</b></div>
+            <div class="fund-row"><span>PEG Ratio</span><b>{{ valuation.get('peg_ratio') | fmt(2) }}</b></div>
+            <div class="fund-row"><span>Price / Book</span><b>{{ valuation.get('price_to_book') | fmt(1) }}</b></div>
+            <div class="fund-row"><span>Price / Sales</span><b>{{ valuation.get('price_to_sales') | fmt(1) }}</b></div>
+            <div class="fund-row"><span>EV / Revenue</span><b>{{ valuation.get('enterprise_to_revenue') | fmt(1) }}</b></div>
+            <div class="fund-row"><span>EV / EBITDA</span><b>{{ valuation.get('enterprise_to_ebitda') | fmt(1) }}</b></div>
+        </div>
+        {% endif %}
+
+        {% if profitability %}
+        <div class="fund-card">
+            <div class="fund-title">Profitability</div>
+            <div class="fund-row"><span>Gross Margin</span><b>{{ profitability.get('gross_margin') | pct }}</b></div>
+            <div class="fund-row"><span>Operating Margin</span><b>{{ profitability.get('operating_margin') | pct }}</b></div>
+            <div class="fund-row"><span>Net Margin</span><b>{{ profitability.get('profit_margin') | pct }}</b></div>
+            <div class="fund-row"><span>Return on Equity</span><b>{{ profitability.get('return_on_equity') | pct }}</b></div>
+            <div class="fund-row"><span>Return on Assets</span><b>{{ profitability.get('return_on_assets') | pct }}</b></div>
+            <div class="fund-row"><span>EBITDA Margin</span><b>{{ profitability.get('ebitda_margin') | pct }}</b></div>
+        </div>
+        {% endif %}
+
+        {% if liquidity %}
+        <div class="fund-card">
+            <div class="fund-title">Liquidity</div>
+            <div class="fund-row"><span>Current Ratio</span><b>{{ liquidity.get('current_ratio') | fmt(2) }}</b></div>
+            <div class="fund-row"><span>Quick Ratio</span><b>{{ liquidity.get('quick_ratio') | fmt(2) }}</b></div>
+            <div class="fund-row"><span>Cash Ratio</span><b>{{ liquidity.get('cash_ratio') | fmt(2) }}</b></div>
+            <div class="fund-row"><span>Debt / Equity</span><b>{{ liquidity.get('debt_to_equity') | fmt(1) }}</b></div>
+            <div class="fund-row"><span>Interest Coverage</span><b>{{ liquidity.get('interest_coverage') | fmt(1) }}</b></div>
+            <div class="fund-row"><span>Debt / EBITDA</span><b>{{ liquidity.get('debt_to_ebitda') | fmt(1) }}</b></div>
+        </div>
+        {% endif %}
+
+        {% if efficiency %}
+        <div class="fund-card">
+            <div class="fund-title">Efficiency</div>
+            <div class="fund-row"><span>Asset Turnover</span><b>{{ efficiency.get('asset_turnover') | fmt(2) }}</b></div>
+            <div class="fund-row"><span>Inventory Turnover</span><b>{{ efficiency.get('inventory_turnover') | fmt(2) }}</b></div>
+            <div class="fund-row"><span>Receivables Turnover</span><b>{{ efficiency.get('receivables_turnover') | fmt(2) }}</b></div>
+            <div class="fund-row"><span>Days Sales Out.</span><b>{{ efficiency.get('days_sales_outstanding') | fmt(1) }}</b></div>
+            <div class="fund-row"><span>Days Inventory</span><b>{{ efficiency.get('days_inventory') | fmt(1) }}</b></div>
+        </div>
+        {% endif %}
+
+        {% if growth %}
+        <div class="fund-card">
+            <div class="fund-title">Growth</div>
+            <div class="fund-row"><span>Revenue Growth</span><b>{{ growth.get('revenue_growth') | pct }}</b></div>
+            <div class="fund-row"><span>Earnings Growth</span><b>{{ growth.get('earnings_growth') | pct }}</b></div>
+            <div class="fund-row"><span>Earnings Q/Q</span><b>{{ growth.get('earnings_quarterly_growth') | pct }}</b></div>
+            <div class="fund-row"><span>EBITDA Growth</span><b>{{ growth.get('ebitda_growth') | pct }}</b></div>
+            <div class="fund-row"><span>Free Cash Flow Growth</span><b>{{ growth.get('free_cash_flow_growth') | pct }}</b></div>
+        </div>
+        {% endif %}
+
+        {% if ownership %}
+        <div class="fund-card">
+            <div class="fund-title">Ownership</div>
+            <div class="fund-row"><span>Insiders</span><b>{{ ownership.get('held_percent_insiders') | pct }}</b></div>
+            <div class="fund-row"><span>Institutions</span><b>{{ ownership.get('held_percent_institutions') | pct }}</b></div>
+            <div class="fund-row"><span>Short % of Float</span><b>{{ ownership.get('short_percent_of_float') | pct }}</b></div>
+            <div class="fund-row"><span>Short Ratio</span><b>{{ ownership.get('short_ratio') | fmt(1) }}</b></div>
+        </div>
+        {% endif %}
+
+        {% if esg %}
+        <div class="fund-card">
+            <div class="fund-title">ESG</div>
+            <div class="fund-row"><span>ESG Score</span><b>{{ esg.get('esg_score') | fmt(0) }}</b></div>
+            <div class="fund-row"><span>Environment</span><b>{{ esg.get('environment_score') | fmt(0) }}</b></div>
+            <div class="fund-row"><span>Social</span><b>{{ esg.get('social_score') | fmt(0) }}</b></div>
+            <div class="fund-row"><span>Governance</span><b>{{ esg.get('governance_score') | fmt(0) }}</b></div>
+        </div>
+        {% endif %}
+
+        {% if analyst %}
+        <div class="fund-card">
+            <div class="fund-title">Analyst Consensus</div>
+            <div class="fund-row"><span>Recommendation</span><b>{{ (analyst.get('recommendation_key') or '—') | upper }}</b></div>
+            <div class="fund-row"><span>Analysts</span><b>{{ analyst.get('number_of_analysts') | fmt(0) }}</b></div>
+            <div class="fund-row"><span>Target (Mean)</span><b>{{ analyst.get('target_mean_price') | money }}</b></div>
+            <div class="fund-row"><span>Target (High)</span><b>{{ analyst.get('target_high_price') | money }}</b></div>
+            <div class="fund-row"><span>Target (Low)</span><b>{{ analyst.get('target_low_price') | money }}</b></div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% set fin = fundamentals.get('financial_statements') or {} %}
+    {% if fin %}
+    <div class="fin-tables">
+        {% set stmts = [
+            ('Income Statement', fin.get('income_statement') or {}, [
+                ('Total Revenue', 'Revenue'),
+                ('Gross Profit', 'Gross Profit'),
+                ('Operating Income', 'Operating Income'),
+                ('EBITDA', 'EBITDA'),
+                ('Net Income', 'Net Income'),
+                ('Diluted EPS', 'Diluted EPS'),
+            ]),
+            ('Balance Sheet', fin.get('balance_sheet') or {}, [
+                ('Total Assets', 'Total Assets'),
+                ('Total Debt', 'Total Debt'),
+                ('Stockholders Equity', 'Equity'),
+                ('Cash And Cash Equivalents', 'Cash'),
+            ]),
+            ('Cash Flow', fin.get('cash_flow') or {}, [
+                ('Operating Cash Flow', 'Operating Cash Flow'),
+                ('Free Cash Flow', 'Free Cash Flow'),
+                ('Capital Expenditure', 'CapEx'),
+                ('Cash Dividends Paid', 'Dividends Paid'),
+            ]),
+        ] %}
+        {% for title, stmt, rows in stmts %}
+            {% if stmt %}
+            <div class="fin-table">
+                <div class="fund-title">{{ title }}</div>
+                <div class="table-wrap">
+                    <table class="stock-table">
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                {% for period, _values in stmt.items() %}
+                                    {% if loop.index0 < 4 %}<th>{{ period | ymd }}</th>{% endif %}
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for key, label in rows %}
+                                <tr>
+                                    <th>{{ label }}</th>
+                                    {% for _period, values in stmt.items() %}
+                                        {% if loop.index0 < 4 %}
+                                            <td class="mono">{{ values.get(key) | money }}</td>
+                                        {% endif %}
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if fundamentals.get('analysis_date') %}
+        <p class="field-hint muted" style="margin-top:14px;">Fundamental analysis as of {{ fundamentals.get('analysis_date') }} · Source: Yahoo Finance</p>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function toggleWatchlist() {
+        const btn = document.getElementById('watchlistBtn');
+        if (!btn) return;
+        const symbol = btn.getAttribute('data-symbol');
+        const inWatchlist = btn.getAttribute('data-in-watchlist') === 'true';
+        const endpoint = inWatchlist ? '/api/watchlist/remove' : '/api/watchlist/add';
+        window.StockPredictorAPI.post(endpoint, {symbol: symbol})
+            .then(function (data) {
+                if (data.success) {
+                    const nowIn = !inWatchlist;
+                    btn.setAttribute('data-in-watchlist', nowIn ? 'true' : 'false');
+                    btn.textContent = nowIn ? '⭐ In Watchlist' : '☆ Add to Watchlist';
+                    showToast(data.message, 'success');
+                } else {
+                    showToast(data.message, 'warning');
+                }
+            })
+            .catch(function (err) { showToast(err.message, 'error'); });
+    }
+</script>
+{% endblock %}

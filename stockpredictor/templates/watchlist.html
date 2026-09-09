@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block title %}Watchlist — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>📋 Your Watchlist</h1>
+    <span class="pill {{ 'pill-green' if watchlist else 'pill-neutral' }}">{{ watchlist|length }} symbols</span>
+</div>
+<p class="subtitle">Track symbols, set price alerts and get one-click analysis</p>
+
+{% if triggered %}
+    <div class="alert-banner" id="alertBanner">
+        <strong>🔔 Price alerts triggered:</strong>
+        <ul>
+            {% for alert in triggered %}
+                <li>{{ alert.symbol }} hit {{ alert.condition }} <strong>${{ alert.current_price }}</strong> (target ${{ alert.threshold }})</li>
+            {% endfor %}
+        </ul>
+        <button type="button" class="btn btn-outline btn-sm" onclick="dismissBanner()">Dismiss</button>
+    </div>
+{% endif %}
+
+<section class="card">
+    <h2>Add Symbol</h2>
+    <div class="inline-form">
+        <input type="text" id="newSymbol" placeholder="AAPL, MSFT, RELIANCE.NS"
+               autocapitalize="characters" spellcheck="false">
+        <button type="button" class="btn btn-success" id="addBtn" onclick="addStock()">＋ Add</button>
+    </div>
+    <p class="field-hint">Press Enter or click Add — live price and daily change are fetched automatically.</p>
+</section>
+
+<section class="card">
+    <h2>Symbols</h2>
+    {% if watchlist %}
+        <input type="search" id="watchlistFilter" class="watchlist-search"
+               placeholder="Filter symbols…" autocomplete="off">
+        <div class="table-wrap">
+            <table class="stock-table" id="watchlistTable">
+                <thead>
+                    <tr><th>Symbol</th><th>Current Price</th><th>24h Change</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for item in watchlist %}
+                        <tr data-symbol="{{ item.symbol }}">
+                            <td><a href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ item.symbol }}">{{ item.symbol }} ⚡</a></td>
+                            <td class="mono quote-price">{{ "$%.2f" | format(item.price) if item.price else '—' }}</td>
+                            <td class="quote-change">
+                                {% if item.change_pct is not none %}
+                                    <span class="{{ 'trend-up' if item.change_pct >= 0 else 'trend-down' }}">
+                                        {{ '▲' if item.change_pct >= 0 else '▼' }} {{ "%.2f" | format(item.change_pct) }}%
+                                    </span>
+                                {% else %}
+                                    <span class="muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="actions-cell">
+                                <button type="button" class="btn btn-outline btn-sm"
+                                        onclick="setAlert('{{ item.symbol }}')">🔔 Alert</button>
+                                <button type="button" class="btn btn-danger btn-sm"
+                                        onclick="removeStock('{{ item.symbol }}')">Remove</button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="muted">Your watchlist is empty. Add a symbol above.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <div class="card-header">
+        <h2>🔔 Price Alerts</h2>
+        <span class="pill {{ 'pill-gold' if alerts else 'pill-neutral' }}">{{ alerts|length }} active</span>
+    </div>
+    {% if alerts %}
+        <div class="table-wrap">
+            <table class="stock-table">
+                <thead><tr><th>Symbol</th><th>Condition</th><th>Target</th><th>Status</th><th>Created</th><th></th></tr></thead>
+                <tbody>
+                    {% for alert in alerts %}
+                        <tr>
+                            <td>{{ alert.symbol }}</td>
+                            <td class="{{ 'trend-up' if alert.condition == 'above' else 'trend-down' }}">
+                                {{ '≥' if alert.condition == 'above' else '≤' }} {{ alert.threshold }}
+                            </td>
+                            <td class="mono">${{ alert.threshold }}</td>
+                            <td>
+                                {% if alert.last_triggered %}
+                                    <span class="pill pill-gold" title="Last triggered {{ alert.last_triggered }}">🔔 {{ alert.last_triggered }}</span>
+                                {% else %}
+                                    <span class="pill pill-neutral">Armed</span>
+                                {% endif %}
+                            </td>
+                            <td class="muted">{{ alert.created }}</td>
+                            <td>
+                                <button type="button" class="btn btn-danger btn-sm"
+                                        onclick="removeAlert('{{ alert.id }}')">Remove</button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="muted">No alerts yet. Click 🔔 Alert next to any symbol above to be notified when it crosses a price.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2>Explore</h2>
+    <div class="quick-links">
+        <a href="{{ url_for('analyze.analyze_stock') }}">📊 Standard Analysis</a>
+        <a href="{{ url_for('analyze.analyze_any_stock') }}">🌍 Global Analysis</a>
+        <a href="{{ url_for('analytics.page') }}">📈 Market Analytics</a>
+        <a href="{{ url_for('portfolio.page') }}">💼 My Portfolio</a>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/socket.io.min.js') }}"></script>
+<script>
+    const symbolInput = document.getElementById('newSymbol');
+
+    symbolInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            addStock();
+        }
+    });
+
+    const filterInput = document.getElementById('watchlistFilter');
+    if (filterInput) {
+        filterInput.addEventListener('input', function () {
+            const term = filterInput.value.trim().toUpperCase();
+            document.querySelectorAll('#watchlistTable tbody tr').forEach(function (row) {
+                row.style.display = !term || row.textContent.toUpperCase().indexOf(term) !== -1 ? '' : 'none';
+            });
+        });
+    }
+
+    function addStock() {
+        const symbol = symbolInput.value.trim().toUpperCase();
+        if (!symbol) {
+            showToast('Please enter a symbol first.', 'warning');
+            return;
+        }
+        window.StockPredictorAPI.post('/api/watchlist/add', {symbol: symbol})
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    location.reload();
+                } else {
+                    showToast(data.message, 'warning');
+                }
+            })
+            .catch(err => showToast(err.message, 'error'));
+    }
+
+    function removeStock(symbol) {
+        window.SppModal.confirm({
+            title: 'Remove ' + symbol,
+            message: 'Remove ' + symbol + ' from your watchlist?',
+            confirmLabel: 'Remove',
+            confirmClass: 'btn btn-danger'
+        }).then(function (ok) {
+            if (!ok) return;
+            window.StockPredictorAPI.post('/api/watchlist/remove', {symbol: symbol})
+                .then(data => {
+                    if (data.success) {
+                        showToast(data.message, 'success');
+                        location.reload();
+                    } else {
+                        showToast(data.message, 'warning');
+                    }
+                })
+                .catch(err => showToast(err.message, 'error'));
+        });
+    }
+
+    function setAlert(symbol) {
+        window.SppModal.prompt({
+            title: 'Set price alert — ' + symbol,
+            message: 'Notify me when ' + symbol + ' goes:',
+            fields: [
+                {name: 'condition', label: 'Condition', type: 'select', value: 'above', options: [
+                    {value: 'above', label: 'Above (≥)'},
+                    {value: 'below', label: 'Below (≤)'}
+                ]},
+                {name: 'threshold', label: 'Target price ($)', type: 'number', placeholder: 'e.g. 150.00', step: '0.01'}
+            ],
+            confirmLabel: 'Set Alert'
+        }).then(function (values) {
+            if (!values) return;
+            const c = values.condition;
+            const threshold = parseFloat(values.threshold);
+            if (!isFinite(threshold) || threshold <= 0) {
+                showToast('Please enter a valid target price.', 'warning');
+                return;
+            }
+            window.StockPredictorAPI.post('/api/alerts/add', {
+                symbol: symbol, condition: c, threshold: threshold
+            }).then(data => {
+                if (data.success) { showToast(data.message, 'success'); location.reload(); }
+                else { showToast(data.message, 'warning'); }
+            }).catch(err => showToast(err.message, 'error'));
+        });
+    }
+
+    function removeAlert(alertId) {
+        window.SppModal.confirm({
+            title: 'Remove alert',
+            message: 'Remove this alert?',
+            confirmLabel: 'Remove',
+            confirmClass: 'btn btn-danger'
+        }).then(function (ok) {
+            if (!ok) return;
+            window.StockPredictorAPI.post('/api/alerts/remove', {alert_id: alertId})
+                .then(data => {
+                    if (data.success) { showToast(data.message, 'success'); location.reload(); }
+                    else { showToast(data.message, 'warning'); }
+                })
+                .catch(err => showToast(err.message, 'error'));
+        });
+    }
+
+    function dismissBanner() {
+        const banner = document.getElementById('alertBanner');
+        if (banner) banner.remove();
+    }
+
+    /* --- Realtime quotes (Socket.IO with REST polling fallback) --- */
+    function applyQuotes(quotes) {
+        if (!quotes || !quotes.length) return;
+        quotes.forEach(function (quote) {
+            const symbol = String(quote.symbol || '').replace(/"/g, '\\"');
+            const row = document.querySelector('#watchlistTable tr[data-symbol="' + symbol + '"]');
+            if (!row) return;
+            const priceCell = row.querySelector('.quote-price');
+            if (priceCell && quote.price != null) {
+                priceCell.textContent = '$' + Number(quote.price).toFixed(2);
+            }
+            const changeCell = row.querySelector('.quote-change');
+            if (changeCell && quote.change_pct != null) {
+                const pct = Number(quote.change_pct);
+                changeCell.innerHTML = '<span class="' + (pct >= 0 ? 'trend-up' : 'trend-down') + '">'
+                    + (pct >= 0 ? '▲' : '▼') + ' ' + pct.toFixed(2) + '%</span>';
+            }
+        });
+    }
+
+    (function startRealtime() {
+        const table = document.getElementById('watchlistTable');
+        if (!table) return;
+
+        function startPolling() {
+            setInterval(function () {
+                window.StockPredictorAPI.get('/api/watchlist/quotes')
+                    .then(function (data) { if (data && data.quotes) applyQuotes(data.quotes); })
+                    .catch(function () {});
+            }, 10000);
+        }
+
+        if (window.io && typeof window.io === 'function') {
+            let socket = null;
+            try {
+                socket = window.io('/', { transports: ['websocket', 'polling'] });
+            } catch (e) { socket = null; }
+            if (socket) {
+                socket.on('watchlist_quotes', function (payload) { applyQuotes(payload && payload.quotes); });
+                socket.on('connect_error', function () { socket.close(); startPolling(); });
+                return;
+            }
+        }
+        startPolling();
+    })();
+</script>
+{% endblock %}

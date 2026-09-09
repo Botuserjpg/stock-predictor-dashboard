@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Verify Email — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="auth-card">
+    <h1>📧 Verify Your Email</h1>
+    <p class="subtitle">Enter the one-time code sent to <strong>{{ email }}</strong></p>
+
+    {% if error %}
+        <div class="flash flash-error">{{ error }}</div>
+    {% endif %}
+
+    {% if demo_otp %}
+        <div class="flash flash-info">
+            Demo mode (SMTP not configured): your verification code is
+            <strong data-otp="{{ demo_otp }}">{{ demo_otp }}</strong>
+        </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('auth.verify_otp') }}" id="otpForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="email" value="{{ email }}">
+        <div class="form-group">
+            <label for="otp">One-Time Code</label>
+            <input type="text" id="otp" name="otp" required inputmode="numeric" pattern="[0-9]{6}"
+                   maxlength="6" placeholder="123456" autocomplete="one-time-code"
+                   autofocus>
+            <p class="field-hint">Enter the 6-digit code from your email. It expires in a few minutes.</p>
+        </div>
+        <button type="submit" class="btn btn-success btn-block">Verify &amp; Create Account</button>
+    </form>
+
+    <form method="POST" action="{{ url_for('auth.resend_otp') }}" class="auth-links">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="email" value="{{ email }}">
+        <p>Didn't receive the code? <button type="submit" class="link-button">Resend code</button></p>
+    </form>
+
+    <div class="auth-links">
+        <a href="{{ url_for('auth.register') }}">← Change email / start over</a>
+    </div>
+</div>
+{% endblock %}

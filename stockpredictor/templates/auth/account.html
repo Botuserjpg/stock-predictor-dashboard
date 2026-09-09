@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Account — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="auth-card">
+    <h1>👤 Your Account</h1>
+    <p class="subtitle">Account details and settings</p>
+
+    <div class="form-group">
+        <label>Email</label>
+        <input type="text" value="{{ current_user.email }}" disabled>
+    </div>
+    {% if account.created_at %}
+    <div class="form-group">
+        <label>Member since</label>
+        <input type="text" value="{{ account.created_at }}" disabled>
+    </div>
+    {% endif %}
+</div>
+
+<div class="auth-card danger-zone">
+    <h2>⚠️ Delete Account</h2>
+    <p>
+        Deleting your account permanently removes your profile, watchlist and
+        portfolio. This cannot be undone.
+    </p>
+    <form method="POST" action="{{ url_for('auth.delete_account') }}" id="deleteAccountForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label for="confirm_email">Type your email to confirm</label>
+            <input type="email" id="confirm_email" name="confirm_email" required
+                   placeholder="{{ current_user.email }}" autocomplete="off">
+            <p class="field-hint">Enter {{ current_user.email }} to permanently delete your account.</p>
+        </div>
+        <button type="submit" class="btn btn-danger btn-block">Delete My Account</button>
+    </form>
+</div>
+{% endblock %}

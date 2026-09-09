@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: stock-predictor-dashboard
+    runtime: docker
+    healthCheckPath: /health
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: PUBLIC_DEMO
+        value: "true"
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: ENABLE_ALERT_SCHEDULER
+        value: "false"
+      - key: SECRET_KEY
+        generateValue: true
