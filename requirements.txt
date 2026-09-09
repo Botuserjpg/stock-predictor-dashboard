@@ -50,3 +50,4 @@ aiohttp==3.12.15
 beautifulsoup4==4.13.3
 
 tensorflow==2.15.0
+resend
