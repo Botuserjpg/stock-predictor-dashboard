@@ -61,7 +61,7 @@
                     <strong>{{ item.symbol }}</strong>
                     {% if not demo_mode %}<a class="btn btn-outline btn-sm" href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ item.symbol }}">Analyze</a>{% endif %}
                 </div>
-                <div class="metric-value">{{ "$%.2f" | format(q.get('price', 0)) if q.get('price') else '—' }}</div>
+                <div class="metric-value">{% if q.get('price') %}{{ currency_symbol(item.symbol) }}{{ "%.2f" | format(q.get('price')) }}{% else %}—{% endif %}</div>
                 <div class="metric-change {{ 'trend-up' if pct is not none and pct >= 0 else ('trend-down' if pct is not none else 'trend-neutral') }}">
                     {% if pct is not none %}<span class="arrow">{{ '▲' if pct >= 0 else '▼' }}</span> {{ "%.2f" | format(pct) }}%{% else %}—{% endif %}
                 </div>
@@ -118,7 +118,7 @@
                     {% for item in movers.gainers %}
                         <tr>
                             <td><a href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ item.symbol }}">{{ item.symbol }}</a></td>
-                            <td class="mono">${{ "%.2f" | format(item.quote.get('price', 0)) }}</td>
+                            <td class="mono">{% if item.quote.get('price') %}{{ currency_symbol(item.symbol) }}{{ "%.2f" | format(item.quote.get('price')) }}{% else %}—{% endif %}</td>
                             <td class="trend-up mover-arrow">▲ {{ "%.2f" | format(item.quote.get('change_pct')) }}%</td>
                         </tr>
                     {% endfor %}
@@ -138,7 +138,7 @@
                     {% for item in movers.losers %}
                         <tr>
                             <td><a href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ item.symbol }}">{{ item.symbol }}</a></td>
-                            <td class="mono">${{ "%.2f" | format(item.quote.get('price', 0)) }}</td>
+                            <td class="mono">{% if item.quote.get('price') %}{{ currency_symbol(item.symbol) }}{{ "%.2f" | format(item.quote.get('price')) }}{% else %}—{% endif %}</td>
                             <td class="trend-down mover-arrow">▼ {{ "%.2f" | format(item.quote.get('change_pct')) }}%</td>
                         </tr>
                     {% endfor %}
@@ -165,7 +165,7 @@
                         <td><strong>{{ item.symbol }}</strong></td>
                         <td><span class="pill {{ 'pill-green' if buy else 'pill-red' }}">{{ item.signal }}</span></td>
                         <td>{{ "%.0f" | format((item.confidence or 0) * 100) }}%</td>
-                        <td class="mono">${{ "%.2f" | format(item.predicted_price) }}</td>
+                        <td class="mono">{% if item.predicted_price is not none %}{{ currency_symbol(item.symbol) }}{{ "%.2f" | format(item.predicted_price) }}{% else %}—{% endif %}</td>
                         <td class="muted">{{ item.model_type }}</td>
                         <td class="muted">{{ item.run_at }}</td>
                         <td><a class="btn btn-outline btn-sm" href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ item.symbol }}">Re-run</a></td>
@@ -232,7 +232,7 @@
                         {{ symbol }}
                         <span class="pill {{ 'pill-green' if buy else 'pill-red' }}">{{ pred.signal }}</span>
                     </div>
-                    <div class="metric-value">${{ "%.2f" | format(pred.predicted_price) }}</div>
+                    <div class="metric-value">{% if pred.predicted_price is not none %}{{ currency_symbol(symbol) }}{{ "%.2f" | format(pred.predicted_price) }}{% else %}—{% endif %}</div>
                     <div class="metric-change {{ 'trend-up' if buy else 'trend-down' }}">
                         {{ pred.sentiment }}
                     </div>
@@ -264,7 +264,7 @@
         {% for alert in alerts %}
             <li>
                 {{ alert.symbol }}
-                <span class="muted">— {{ 'above' if alert.condition == 'above' else 'below' }} ${{ alert.threshold }}</span>
+                <span class="muted">— {{ 'above' if alert.condition == 'above' else 'below' }} {{ currency_symbol(alert.symbol) }}{{ alert.threshold }}</span>
                 <a href="{{ url_for('watchlist.page') }}" class="btn btn-outline btn-sm" style="margin-left:8px;">Manage</a>
             </li>
         {% endfor %}

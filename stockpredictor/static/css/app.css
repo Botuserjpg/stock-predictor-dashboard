@@ -777,7 +777,6 @@ select option { background: var(--bg-1); color: var(--text); }
 }
 
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2.2s infinite; }
-@keyframes pulse { 50% { opacity: 0.45; } }
 
 /* ============ Chart ============ */
 .chart-wrap { width: 100%; margin-top: 6px; }
@@ -1103,9 +1102,8 @@ details pre { max-width: 420px; overflow-x: auto; font-size: 0.78em; color: var(
     display: grid;
     place-items: center;
     font-size: 2.2em;
-    animation: pulse 1.4s ease-in-out infinite;
+animation: pulse 1.4s ease-in-out infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.9); opacity: 0.7; } }
 
 .progress-track {

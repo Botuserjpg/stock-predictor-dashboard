@@ -23,9 +23,11 @@ accounts and all write features require authentication.
 
 ## Verified Results
 
-Leakage-audited, walk-forward backtest on **5 instruments** (AAPL, MSFT, TSLA,
+Leakage-audited backtest on **5 instruments** (AAPL, MSFT, TSLA,
 GOOGL, RY.TO) with a 60-day lookback, 186 strictly out-of-sample trading days per
-symbol (930 total), next-day-close horizon:
+symbol (930 total), next-day-close horizon. This is a **fixed chronological
+70/15/15 split** (train/validation/test), not a rolling walk-forward retraining
+protocol:
 
 | Metric | Value |
 |---|---|
@@ -156,7 +158,7 @@ environment variables / `.env`.
 - `sentiment_analysis.py` — real-time news/social sentiment via APIs.
 - `stockpredictor/` — refactored Flask application package (config, services, views).
 - `app.py`, `wsgi.py` — Flask entry points.
-- `backtest_ml/run_backtest.py` — walk-forward, leakage-audited backtest harness.
+- `backtest_ml/run_backtest.py` — leakage-audited backtest harness (fixed chronological 70/15/15 split).
 - `tests/` — fast unit tests.
 - `docs/PRODUCTION_ROADMAP.md` — production hardening roadmap.
 
@@ -173,7 +175,7 @@ intentionally git-ignored.
   Carlo price simulator.
 - **Risk engine:** position sizing (volatility targeting + Kelly), portfolio VaR,
   correlation matrix, and rebalance suggestions.
-- **Backtesting + explainability:** walk-forward strategy backtests, SHAP feature
+- **Backtesting + explainability:** chronological-split strategy backtests, SHAP feature
   importance, drift monitoring (PSI) with auto-retrain.
 - **Streamlit UI:** dark/light theme, CSV export, analysis history, and portfolio
   simulator tools.

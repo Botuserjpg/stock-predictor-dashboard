@@ -7,6 +7,7 @@ immediately without a retrain.
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, Optional, Tuple
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, url_for
@@ -121,22 +122,30 @@ def _assemble_result(symbol: str, period: str, days: int, risk: str,
     sentiment = {}
     fundamentals = {}
     price_history = []
-    try:
-        technical = stocks.get_technical_analysis(symbol, period=period)
-    except Exception as exc:  # pragma: no cover - network dependent
-        logger.warning("Technical analysis failed for %s: %s", symbol, exc)
-    try:
-        sentiment = sentiment_service.get_sentiment(symbol)
-    except Exception as exc:  # pragma: no cover - network dependent
-        logger.warning("Sentiment failed for %s: %s", symbol, exc)
-    try:
-        fundamentals = stocks.get_company_fundamentals(symbol)
-    except Exception as exc:  # pragma: no cover - network dependent
-        logger.warning("Fundamentals failed for %s: %s", symbol, exc)
-    try:
-        price_history = stocks.get_price_history(symbol, period=period)
-    except Exception as exc:  # pragma: no cover - network dependent
-        logger.warning("Price history failed for %s: %s", symbol, exc)
+
+    _FUTURES = {
+        "technical":      lambda: stocks.get_technical_analysis(symbol, period=period),
+        "sentiment":      lambda: sentiment_service.get_sentiment(symbol),
+        "fundamentals":   lambda: stocks.get_company_fundamentals(symbol),
+        "price_history":  lambda: stocks.get_price_history(symbol, period=period),
+    }
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        future_map = {pool.submit(fn): key for key, fn in _FUTURES.items()}
+        for future in as_completed(future_map):
+            key = future_map[future]
+            try:
+                value = future.result()
+            except Exception as exc:  # pragma: no cover - network dependent
+                logger.warning("%s fetch failed for %s: %s", key, symbol, exc)
+                continue
+            if key == "technical":
+                technical = value
+            elif key == "sentiment":
+                sentiment = value
+            elif key == "fundamentals":
+                fundamentals = value
+            elif key == "price_history":
+                price_history = value
 
     regime, model_selection, analyst_report = _enrich_advanced(
         symbol, price_history, report, technical, sentiment

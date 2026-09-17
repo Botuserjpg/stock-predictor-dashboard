@@ -90,9 +90,13 @@ def _register_context_processors(app: Flask) -> None:
 
     @app.context_processor
     def inject_globals():
+        from production_core import is_indian_symbol, currency_symbol_for
+
         return {
             "current_user": current_user,
             "app_name": "Stock Predictor Pro",
+            "currency_symbol": currency_symbol_for,
+            "is_indian_symbol": is_indian_symbol,
         }
 
 
@@ -129,21 +133,21 @@ def _register_template_filters(app: Flask) -> None:
         return f"{number * 100:.{nd}f}%"
 
     @app.template_filter("money")
-    def money_filter(value):
+    def money_filter(value, symbol="$"):
         number = _is_number(value)
         if number is None:
             return "—"
         sign = "-" if number < 0 else ""
         abs_number = abs(number)
         if abs_number >= 1e12:
-            return f"{sign}${abs_number / 1e12:.2f}T"
+            return f"{sign}{symbol}{abs_number / 1e12:.2f}T"
         if abs_number >= 1e9:
-            return f"{sign}${abs_number / 1e9:.2f}B"
+            return f"{sign}{symbol}{abs_number / 1e9:.2f}B"
         if abs_number >= 1e6:
-            return f"{sign}${abs_number / 1e6:.2f}M"
+            return f"{sign}{symbol}{abs_number / 1e6:.2f}M"
         if abs_number >= 1e3:
-            return f"{sign}${abs_number / 1e3:.1f}K"
-        return f"{number:,.2f}"
+            return f"{sign}{symbol}{abs_number / 1e3:.1f}K"
+        return f"{sign}{symbol}{number:,.2f}"
 
     @app.template_filter("ymd")
     def ymd_filter(value):

@@ -84,8 +84,8 @@
                     {{ ins.hint }}
                 </div>
                 <div class="insight-guide">
-                    <span>Stop-loss ≈ ${{ "%.2f" | format(ins.stop_loss) }}</span>
-                    <span>Target ≈ ${{ "%.2f" | format(ins.take_profit) }}</span>
+                    <span>Stop-loss ≈ {{ currency_symbol(ins.symbol) }}{{ "%.2f" | format(ins.stop_loss) }}</span>
+                    <span>Target ≈ {{ currency_symbol(ins.symbol) }}{{ "%.2f" | format(ins.take_profit) }}</span>
                 </div>
                 {% if loop.index == 1 %}
                     <div class="top-pick-badge">★ Most profitable outlook</div>
@@ -150,8 +150,8 @@
                         <tr>
                             <td><a href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ row.symbol }}">{{ row.symbol }} ⚡</a></td>
                             <td class="mono">{{ row.quantity }}</td>
-                            <td class="mono">${{ row.avg_price }}</td>
-                            <td class="mono">{{ "$%.2f" | format(row.price) if row.price else '—' }}</td>
+                            <td class="mono">{% if row.avg_price %}{{ currency_symbol(row.symbol) }}{{ row.avg_price }}{% else %}—{% endif %}</td>
+                            <td class="mono">{% if row.price %}{{ currency_symbol(row.symbol) }}{{ "%.2f" | format(row.price) }}{% else %}—{% endif %}</td>
                             <td>
                                 {% if row.closes and row.closes|length >= 2 %}
                                     <div class="sparkline-cell" data-sparkline="{{ row.closes | tojson }}"></div>
@@ -159,10 +159,10 @@
                                     <span class="muted">—</span>
                                 {% endif %}
                             </td>
-                            <td class="mono">${{ "%.2f" | format(row.value) }}</td>
+                            <td class="mono">{{ currency_symbol(row.symbol) }}{{ "%.2f" | format(row.value) }}</td>
                             <td class="{{ 'trend-up' if row.unrealized and row.unrealized >= 0 else 'trend-down' }}">
                                 {% if row.unrealized is not none %}
-                                    {{ '▲' if row.unrealized >= 0 else '▼' }} ${{ "%.2f" | format(row.unrealized | abs) }}
+                                    {{ '▲' if row.unrealized >= 0 else '▼' }} {{ currency_symbol(row.symbol) }}{{ "%.2f" | format(row.unrealized | abs) }}
                                     ({{ "%+.2f" | format(row.unrealized_pct) }}%)
                                 {% else %}<span class="muted">—</span>{% endif %}
                             </td>
@@ -291,7 +291,7 @@
                             <td><strong>{{ size.symbol }}</strong></td>
                             <td class="mono">{{ "%.1f" | format(size.annual_vol_pct) }}%</td>
                             <td class="mono">{{ size.shares }}</td>
-                            <td class="mono">${{ "%.2f" | format(size.position_value) }}</td>
+                            <td class="mono">{{ currency_symbol(size.symbol) }}{{ "%.2f" | format(size.position_value) }}</td>
                             <td class="mono">{{ "%.1f" | format(size.allocation_pct) }}%</td>
                         </tr>
                     {% endfor %}
@@ -342,7 +342,7 @@
                         </td>
                         <td>{{ entry.symbol }}</td>
                         <td class="mono">{{ entry.quantity if entry.quantity is not none else '—' }}</td>
-                        <td class="mono">${{ entry.price }}</td>
+                        <td class="mono">{{ currency_symbol(entry.symbol) }}{{ entry.price }}</td>
                     </tr>
                 {% endfor %}
             </tbody>

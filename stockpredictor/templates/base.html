@@ -19,6 +19,20 @@
 <a class="skip-link" href="#main">Skip to main content</a>
 {% set active_ns = request.endpoint.split('.')[0] if request.endpoint else '' %}
 
+{% macro accent_picker() %}
+<div class="accent-picker" id="accentPicker">
+    <div class="accent-swatches" id="accentSwatches" hidden>
+        <button type="button" class="accent-swatch" data-accent="blue" title="Blue" style="background:linear-gradient(135deg,#38bdf8,#818cf8)"></button>
+        <button type="button" class="accent-swatch" data-accent="violet" title="Violet" style="background:linear-gradient(135deg,#a78bfa,#f472b6)"></button>
+        <button type="button" class="accent-swatch" data-accent="indigo" title="Indigo" style="background:linear-gradient(135deg,#818cf8,#c084fc)"></button>
+        <button type="button" class="accent-swatch" data-accent="teal" title="Teal" style="background:linear-gradient(135deg,#2dd4bf,#38bdf8)"></button>
+        <button type="button" class="accent-swatch" data-accent="gold" title="Gold" style="background:linear-gradient(135deg,#f5c542,#fb923c)"></button>
+        <button type="button" class="accent-swatch" data-accent="rose" title="Rose" style="background:linear-gradient(135deg,#fb7185,#f472b6)"></button>
+    </div>
+    <button type="button" class="accent-toggle" id="accentToggle" aria-label="Change accent color" title="Accent color"><span class="accent-dot"></span></button>
+</div>
+{% endmacro %}
+
 <nav class="topnav">
     <a class="brand" href="{{ url_for('dashboard.home') }}">
         <span class="brand-mark">📈</span> {{ app_name }}
@@ -42,17 +56,7 @@
             {% endif %}
             <span class="nav-user">👤 {{ current_user.email }}</span>
             <div class="nav-actions">
-                <div class="accent-picker" id="accentPicker">
-                    <div class="accent-swatches" id="accentSwatches" hidden>
-                        <button type="button" class="accent-swatch" data-accent="blue" title="Blue" style="background:linear-gradient(135deg,#38bdf8,#818cf8)"></button>
-                        <button type="button" class="accent-swatch" data-accent="violet" title="Violet" style="background:linear-gradient(135deg,#a78bfa,#f472b6)"></button>
-                        <button type="button" class="accent-swatch" data-accent="indigo" title="Indigo" style="background:linear-gradient(135deg,#818cf8,#c084fc)"></button>
-                        <button type="button" class="accent-swatch" data-accent="teal" title="Teal" style="background:linear-gradient(135deg,#2dd4bf,#38bdf8)"></button>
-                        <button type="button" class="accent-swatch" data-accent="gold" title="Gold" style="background:linear-gradient(135deg,#f5c542,#fb923c)"></button>
-                        <button type="button" class="accent-swatch" data-accent="rose" title="Rose" style="background:linear-gradient(135deg,#fb7185,#f472b6)"></button>
-                    </div>
-                    <button type="button" class="accent-toggle" id="accentToggle" aria-label="Change accent color" title="Accent color"><span class="accent-dot"></span></button>
-                </div>
+                {{ accent_picker() }}
                 <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle color theme">🌙</button>
                 <a href="{{ url_for('auth.account') }}">Account</a>
                 <a href="{{ url_for('auth.logout') }}">Logout</a>
@@ -64,17 +68,7 @@
             <a href="{{ url_for('auth.login') }}" class="{{ 'active' if request.endpoint == 'auth.login' else '' }}">Login</a>
             <a href="{{ url_for('auth.register') }}" class="{{ 'active' if request.endpoint == 'auth.register' else '' }}">Register</a>
             <div class="nav-actions">
-                <div class="accent-picker" id="accentPicker">
-                    <div class="accent-swatches" id="accentSwatches" hidden>
-                        <button type="button" class="accent-swatch" data-accent="blue" title="Blue" style="background:linear-gradient(135deg,#38bdf8,#818cf8)"></button>
-                        <button type="button" class="accent-swatch" data-accent="violet" title="Violet" style="background:linear-gradient(135deg,#a78bfa,#f472b6)"></button>
-                        <button type="button" class="accent-swatch" data-accent="indigo" title="Indigo" style="background:linear-gradient(135deg,#818cf8,#c084fc)"></button>
-                        <button type="button" class="accent-swatch" data-accent="teal" title="Teal" style="background:linear-gradient(135deg,#2dd4bf,#38bdf8)"></button>
-                        <button type="button" class="accent-swatch" data-accent="gold" title="Gold" style="background:linear-gradient(135deg,#f5c542,#fb923c)"></button>
-                        <button type="button" class="accent-swatch" data-accent="rose" title="Rose" style="background:linear-gradient(135deg,#fb7185,#f472b6)"></button>
-                    </div>
-                    <button type="button" class="accent-toggle" id="accentToggle" aria-label="Change accent color" title="Accent color"><span class="accent-dot"></span></button>
-                </div>
+                {{ accent_picker() }}
                 <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle color theme">🌙</button>
             </div>
         {% endif %}

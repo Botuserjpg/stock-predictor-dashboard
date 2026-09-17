@@ -77,6 +77,11 @@
 
     /* ---------------- Modal system ---------------- */
     var __modalCloseHandler = null;
+    var __modalLastFocus = null;
+
+    function __modalFocusables(backdrop) {
+        return backdrop.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    }
 
     function modalOpen(title, bodyHtml, actions) {
         var backdrop = document.getElementById('modalBackdrop');
@@ -97,11 +102,20 @@
                 actionsEl.appendChild(btn);
             });
         }
+        __modalLastFocus = document.activeElement;
+        backdrop.setAttribute('role', 'dialog');
+        backdrop.setAttribute('aria-modal', 'true');
         backdrop.hidden = false;
         requestAnimationFrame(function () { backdrop.classList.add('open'); });
         document.body.classList.add('modal-open');
-        var first = bodyEl ? bodyEl.querySelector('input, select, button') : null;
-        if (first) { setTimeout(function () { try { first.focus(); } catch (e) {} }, 60); }
+        var focusables = __modalFocusables(backdrop);
+        if (focusables.length) {
+            setTimeout(function () { try { focusables[0].focus(); } catch (e) {} }, 60);
+        } else {
+            backdrop.setAttribute('tabindex', '-1');
+            backdrop.style.outline = 'none';
+            setTimeout(function () { try { backdrop.focus(); } catch (e) {} }, 60);
+        }
         return backdrop;
     }
 
@@ -110,8 +124,11 @@
         if (!backdrop || backdrop.hidden) return;
         backdrop.classList.remove('open');
         backdrop.hidden = true;
+        backdrop.removeAttribute('role');
+        backdrop.removeAttribute('aria-modal');
         document.body.classList.remove('modal-open');
         __modalCloseHandler = null;
+        if (__modalLastFocus) { try { __modalLastFocus.focus(); } catch (e) {} __modalLastFocus = null; }
     }
 
     function setupModal() {
@@ -121,7 +138,17 @@
         function close() { if (__modalCloseHandler) __modalCloseHandler(); }
         if (closeBtn) closeBtn.addEventListener('click', close);
         backdrop.addEventListener('click', function (e) { if (e.target === backdrop) close(); });
-        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { close(); return; }
+            if (e.key === 'Tab' && !backdrop.hidden) {
+                var focusables = __modalFocusables(backdrop);
+                if (!focusables.length) return;
+                var first = focusables[0];
+                var last = focusables[focusables.length - 1];
+                if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+                else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
+        });
     }
 
     function modalConfirm(opts) {
@@ -253,24 +280,37 @@
         if (!track || !bar) return;
         if (document.body.dataset.authenticated !== 'true') return;
 
-        window.StockPredictorAPI.get('/api/market/ticker')
-            .then(function (data) {
-                const items = data.indices || {};
-                const names = Object.keys(items);
-                if (!names.length) { bar.remove(); return; }
-                track.innerHTML = names.map(function (sym) {
-                    const idx = items[sym];
-                    const pct = (idx.change_pct !== null && idx.change_pct !== undefined) ? idx.change_pct : 0;
-                    const cls = pct >= 0 ? 'trend-up' : 'trend-down';
-                    const arrow = pct >= 0 ? '▲' : '▼';
-                    return '<span class="ticker-item">' +
-                        '<span class="t-symbol">' + escapeHtml(idx.name || sym) + '</span>' +
-                        '<span class="t-price">' + escapeHtml(idx.price) + '</span>' +
-                        '<span class="' + cls + '">' + arrow + ' ' + escapeHtml(pct.toFixed(2)) + '%</span>' +
-                        '</span>';
-                }).join('');
-            })
-            .catch(function () { bar.remove(); });
+        let stopped = false;
+        function stop() {
+            stopped = true;
+            clearInterval(interval);
+            bar.remove();
+        }
+
+        function load() {
+            window.StockPredictorAPI.get('/api/market/ticker')
+                .then(function (data) {
+                    if (stopped) return;
+                    const items = data.indices || {};
+                    const names = Object.keys(items);
+                    if (!names.length) { stop(); return; }
+                    track.innerHTML = names.map(function (sym) {
+                        const idx = items[sym];
+                        const pct = (idx.change_pct !== null && idx.change_pct !== undefined) ? idx.change_pct : 0;
+                        const cls = pct >= 0 ? 'trend-up' : 'trend-down';
+                        const arrow = pct >= 0 ? '▲' : '▼';
+                        return '<span class="ticker-item">' +
+                            '<span class="t-symbol">' + escapeHtml(idx.name || sym) + '</span>' +
+                            '<span class="t-price">' + escapeHtml(idx.price) + '</span>' +
+                            '<span class="' + cls + '">' + arrow + ' ' + escapeHtml(pct.toFixed(2)) + '%</span>' +
+                            '</span>';
+                    }).join('');
+                })
+                .catch(function () { if (!stopped) stop(); });
+        }
+
+        load();
+        const interval = setInterval(load, 60000);
     }
 
     /* ---------------- Password reveal + strength ---------------- */
@@ -359,17 +399,21 @@
             function hideList() {
                 suggestions.hidden = true;
                 activeIndex = -1;
+                symbolInput.setAttribute('aria-expanded', 'false');
+                symbolInput.removeAttribute('aria-activedescendant');
             }
 
             function renderItems(results) {
                 items = results || [];
                 suggestions.innerHTML = items.map(function (r, i) {
-                    return '<li class="autocomplete-item" role="option" data-index="' + i + '" aria-selected="false">' +
+                    return '<li class="autocomplete-item" role="option" id="sugg-' + i + '" data-index="' + i + '" aria-selected="false">' +
                         '<span class="ac-symbol">' + escapeHtml(r.symbol) + '</span>' +
                         '<span class="ac-name">' + escapeHtml(r.name || '') +
                         (r.exchange ? ' · ' + escapeHtml(r.exchange) : '') + '</span></li>';
                 }).join('');
                 suggestions.hidden = items.length === 0;
+                symbolInput.setAttribute('aria-expanded', items.length > 0 ? 'true' : 'false');
+                if (!items.length) symbolInput.removeAttribute('aria-activedescendant');
             }
 
             function selectItem(i) {
@@ -385,6 +429,11 @@
                     li.classList.toggle('active', i === activeIndex);
                     li.setAttribute('aria-selected', i === activeIndex ? 'true' : 'false');
                 });
+                if (activeIndex >= 0) {
+                    symbolInput.setAttribute('aria-activedescendant', 'sugg-' + activeIndex);
+                } else {
+                    symbolInput.removeAttribute('aria-activedescendant');
+                }
             }
 
             symbolInput.addEventListener('input', function () {
@@ -726,6 +775,10 @@
         var swatches = document.getElementById('accentSwatches');
         if (!toggle || !swatches) return;
 
+        function syncExpanded() {
+            toggle.setAttribute('aria-expanded', swatches.hasAttribute('hidden') ? 'false' : 'true');
+        }
+
         function current() {
             var accent = document.documentElement.getAttribute('data-accent') || 'blue';
             return ACCENT_NAMES.indexOf(accent) !== -1 ? accent : 'blue';
@@ -743,25 +796,28 @@
         }
 
         toggle.addEventListener('click', function () {
-            var hidden = swatches.hasAttribute('hidden');
-            if (hidden) {
+            if (swatches.hasAttribute('hidden')) {
                 swatches.removeAttribute('hidden');
                 highlight();
             } else {
                 swatches.setAttribute('hidden', '');
             }
+            syncExpanded();
         });
         swatches.querySelectorAll('.accent-swatch').forEach(function (swatch) {
             swatch.addEventListener('click', function () {
                 apply(swatch.getAttribute('data-accent'));
                 swatches.setAttribute('hidden', '');
+                syncExpanded();
             });
         });
         document.addEventListener('click', function (e) {
             if (!e.target.closest('#accentPicker')) {
                 swatches.setAttribute('hidden', '');
+                syncExpanded();
             }
         });
+        syncExpanded();
         highlight();
     }
 
@@ -997,6 +1053,8 @@
         var fast = fetchText('btFast') || '20';
         var slow = fetchText('btSlow') || '50';
         var panel = document.getElementById('backtestPanel');
+        var btn = document.getElementById('runBacktestBtn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
         panel.innerHTML = '<p class="muted">Running backtest…</p>';
         window.StockPredictorAPI.get('/api/backtest/' + encodeURIComponent(symbol) +
             '?strategy=' + encodeURIComponent(strategy) + '&fast=' + encodeURIComponent(fast) + '&slow=' + encodeURIComponent(slow))
@@ -1005,7 +1063,8 @@
                 window.__advancedData.backtest = { symbol: symbol, data: data };
                 renderBacktest(panel, data);
             })
-            .catch(function (err) { panel.innerHTML = '<p class="muted">Backtest failed: ' + escapeHtml(err.message) + '</p>'; });
+            .catch(function (err) { panel.innerHTML = '<p class="muted">Backtest failed: ' + escapeHtml(err.message) + '</p>'; })
+            .then(function () { if (btn) { btn.disabled = false; btn.textContent = '▶ Run Backtest'; } });
     }
 
     function renderBacktest(panel, data) {
@@ -1092,6 +1151,8 @@
         if (stop) payload.stop = parseFloat(stop);
 
         var panel = document.getElementById('mcPanel');
+        var btn = document.getElementById('runMcBtn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Simulating…'; }
         panel.innerHTML = '<p class="muted">Simulating 1,000 paths…</p>';
         window.StockPredictorAPI.post('/api/scenario/' + encodeURIComponent(symbol), payload)
             .then(function (data) {
@@ -1099,7 +1160,8 @@
                 window.__advancedData.mc = { symbol: symbol, data: data };
                 renderMonteCarlo(panel, data);
             })
-            .catch(function (err) { panel.innerHTML = '<p class="muted">Simulation failed: ' + escapeHtml(err.message) + '</p>'; });
+            .catch(function (err) { panel.innerHTML = '<p class="muted">Simulation failed: ' + escapeHtml(err.message) + '</p>'; })
+            .then(function () { if (btn) { btn.disabled = false; btn.textContent = '▶ Simulate'; } });
     }
 
     function renderMonteCarlo(panel, data) {
@@ -1165,6 +1227,8 @@
         if (!card) return;
         var symbol = card.getAttribute('data-symbol');
         var panel = document.getElementById('explainPanel');
+        var btn = document.getElementById('explainBtn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Computing…'; }
         panel.innerHTML = '<p class="muted">Computing feature attributions…</p>';
         window.StockPredictorAPI.get('/api/explain/' + encodeURIComponent(symbol))
             .then(function (data) {
@@ -1172,7 +1236,8 @@
                 window.__advancedData.explain = data;
                 renderExplain(panel, data);
             })
-            .catch(function (err) { panel.innerHTML = '<p class="muted">Explainability failed: ' + escapeHtml(err.message) + '</p>'; });
+            .catch(function (err) { panel.innerHTML = '<p class="muted">Explainability failed: ' + escapeHtml(err.message) + '</p>'; })
+            .then(function () { if (btn) { btn.disabled = false; btn.textContent = '▶ Explain Forecast'; } });
     }
 
     function renderExplain(panel, data) {
@@ -1219,7 +1284,7 @@
         var panel = document.getElementById('rsPanel');
         var btn = document.getElementById('loadRsBtn');
         if (!panel) return;
-        if (btn) btn.textContent = 'Loading…';
+        if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
         window.StockPredictorAPI.get('/api/relative-strength')
             .then(function (data) {
                 if (!data.success) { panel.innerHTML = '<p class="muted">' + escapeHtml(data.message || 'Unavailable') + '</p>'; return; }
@@ -1246,7 +1311,7 @@
                 sortableTable(document.getElementById('rsTable'));
             })
             .catch(function (err) { panel.innerHTML = '<p class="muted">Relative strength unavailable: ' + escapeHtml(err.message) + '</p>'; })
-            .then(function () { if (btn) btn.textContent = '↻ Load'; });
+            .then(function () { if (btn) { btn.disabled = false; btn.textContent = '↻ Load'; } });
     }
 
     function sortableTable(table) {
@@ -1274,10 +1339,15 @@
         var btn = document.getElementById('loadDriftBtn');
         var card = document.getElementById('driftCard');
         if (!panel || !card) return;
-        if (btn) btn.textContent = 'Checking…';
+        function resetBtn() { if (btn) { btn.disabled = false; btn.textContent = '↻ Check'; } }
+        if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
         var symbols = [];
         try { symbols = JSON.parse(card.getAttribute('data-watchlist') || '[]'); } catch (e) { symbols = []; }
-        if (!symbols.length) { panel.innerHTML = '<p class="muted">Add symbols to your watchlist to monitor drift.</p>'; return; }
+        if (!symbols.length) {
+            panel.innerHTML = '<p class="muted">Add symbols to your watchlist to monitor drift.</p>';
+            resetBtn();
+            return;
+        }
 
         Promise.all(symbols.map(function (s) {
             return window.StockPredictorAPI.get('/api/drift/' + encodeURIComponent(s))
@@ -1300,8 +1370,9 @@
                         '<td>' + drifted + '</td><td>' + retrain + '</td></tr>';
                 }).join('') + '</tbody></table></div>';
             panel.innerHTML = html;
-            if (btn) btn.textContent = '↻ Check';
-        });
+        }).catch(function (err) {
+            panel.innerHTML = '<p class="muted">Drift check failed: ' + escapeHtml(err.message) + '</p>';
+        }).then(resetBtn);
     }
 
     function retrainSymbol(symbol, btn) {
@@ -1324,6 +1395,7 @@
         var jobId = card.getAttribute('data-job-id');
         var hint = document.getElementById('jobMessage');
         var fill = document.getElementById('jobProgressFill');
+        var progress = document.getElementById('jobProgress');
         var endpoint = hint ? hint.getAttribute('data-job-endpoint') : null;
         var resultUrl = hint ? hint.getAttribute('data-result-url') : null;
         if (!jobId || !endpoint) return;
@@ -1338,10 +1410,12 @@
                     var pct = data.status === 'queued' ? 15
                         : (data.status === 'running' ? Math.min(80, 25 + elapsed / 600) : 100);
                     fill.style.width = pct + '%';
+                    if (progress) progress.setAttribute('aria-valuenow', String(Math.round(pct)));
                 }
                 if (data.status === 'complete') {
                     clearInterval(timer);
                     if (fill) fill.style.width = '100%';
+                    if (progress) progress.setAttribute('aria-valuenow', '100');
                     setTimeout(function () { window.location.href = resultUrl; }, 600);
                 } else if (data.status === 'error') {
                     clearInterval(timer);

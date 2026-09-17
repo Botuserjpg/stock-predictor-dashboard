@@ -12,7 +12,7 @@
         <strong>🔔 Price alerts triggered:</strong>
         <ul>
             {% for alert in triggered %}
-                <li>{{ alert.symbol }} hit {{ alert.condition }} <strong>${{ alert.current_price }}</strong> (target ${{ alert.threshold }})</li>
+                <li>{{ alert.symbol }} hit {{ alert.condition }} <strong>{{ currency_symbol(alert.symbol) }}{{ alert.current_price }}</strong> (target {{ currency_symbol(alert.symbol) }}{{ alert.threshold }})</li>
             {% endfor %}
         </ul>
         <button type="button" class="btn btn-outline btn-sm" onclick="dismissBanner()">Dismiss</button>
@@ -43,7 +43,7 @@
                     {% for item in watchlist %}
                         <tr data-symbol="{{ item.symbol }}">
                             <td><a href="{{ url_for('analyze.analyze_any_stock') }}?symbol={{ item.symbol }}">{{ item.symbol }} ⚡</a></td>
-                            <td class="mono quote-price">{{ "$%.2f" | format(item.price) if item.price else '—' }}</td>
+                            <td class="mono quote-price">{% if item.price %}{{ currency_symbol(item.symbol) }}{{ "%.2f" | format(item.price) }}{% else %}—{% endif %}</td>
                             <td class="quote-change">
                                 {% if item.change_pct is not none %}
                                     <span class="{{ 'trend-up' if item.change_pct >= 0 else 'trend-down' }}">
@@ -85,7 +85,7 @@
                             <td class="{{ 'trend-up' if alert.condition == 'above' else 'trend-down' }}">
                                 {{ '≥' if alert.condition == 'above' else '≤' }} {{ alert.threshold }}
                             </td>
-                            <td class="mono">${{ alert.threshold }}</td>
+                            <td class="mono">{{ currency_symbol(alert.symbol) }}{{ alert.threshold }}</td>
                             <td>
                                 {% if alert.last_triggered %}
                                     <span class="pill pill-gold" title="Last triggered {{ alert.last_triggered }}">🔔 {{ alert.last_triggered }}</span>
@@ -189,7 +189,7 @@
                     {value: 'above', label: 'Above (≥)'},
                     {value: 'below', label: 'Below (≤)'}
                 ]},
-                {name: 'threshold', label: 'Target price ($)', type: 'number', placeholder: 'e.g. 150.00', step: '0.01'}
+                {name: 'threshold', label: 'Target price', type: 'number', placeholder: 'e.g. 150.00', step: '0.01'}
             ],
             confirmLabel: 'Set Alert'
         }).then(function (values) {
@@ -240,7 +240,7 @@
             if (!row) return;
             const priceCell = row.querySelector('.quote-price');
             if (priceCell && quote.price != null) {
-                priceCell.textContent = '$' + Number(quote.price).toFixed(2);
+                priceCell.textContent = (quote.currency_symbol || '$') + Number(quote.price).toFixed(2);
             }
             const changeCell = row.querySelector('.quote-change');
             if (changeCell && quote.change_pct != null) {

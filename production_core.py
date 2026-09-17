@@ -290,6 +290,23 @@ def sanitize_symbol(raw_symbol: str) -> str:
     return symbol
 
 
+_INDIAN_EXCHANGE_SUFFIXES = (".NS", ".BO", ".NSE", ".BSE")
+
+
+def is_indian_symbol(symbol: str) -> bool:
+    """True for symbols quoted on Indian exchanges (NSE through .NS, BSE via .BO)."""
+    clean = (symbol or "").upper().strip()
+    return clean.endswith(_INDIAN_EXCHANGE_SUFFIXES)
+
+
+def currency_symbol_for(symbol: str) -> str:
+    """Return the display currency symbol for a symbol.
+
+    Indian tickers (.NS/.BO/.NSE/.BSE) render in rupees; everything else in USD.
+    """
+    return "₹" if is_indian_symbol(symbol) else "$"
+
+
 def validate_positive_number(value: Any, field_name: str, min_value: float = 0.0) -> float:
     try:
         parsed = float(value)

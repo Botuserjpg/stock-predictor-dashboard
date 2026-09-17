@@ -8,12 +8,13 @@
     </div>
     <h1>Analyzing {{ symbol }}</h1>
     <p class="subtitle">Fetching market data, training the AI model and scoring sentiment…</p>
-    <p class="field-hint" id="jobMessage" data-job-endpoint="{{ url_for('analyze.job_status', job_id=job_id) }}"
+    <p class="field-hint" id="jobMessage" role="status" aria-live="polite"
+       data-job-endpoint="{{ url_for('analyze.job_status', job_id=job_id) }}"
        data-result-url="{{ url_for('analyze.results_page', job_id=job_id) }}">
         Queued — this usually takes under a minute.
     </p>
 
-    <div class="progress-track" id="jobProgress">
+    <div class="progress-track" id="jobProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Analysis progress">
         <div class="progress-fill" id="jobProgressFill"></div>
     </div>
 

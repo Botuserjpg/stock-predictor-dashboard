@@ -69,11 +69,15 @@ def get_quote(symbol: str) -> Dict[str, Any]:
     Falls back to price-only data when the change cannot be computed, so callers
     can always render something useful.
     """
-    from production_core import cached
+    from production_core import cached, currency_symbol_for
 
     clean = symbol.upper().strip()
 
     def _produce():
+        quote_meta = {
+            "currency": "INR" if clean.endswith((".NS", ".BO", ".NSE", ".BSE")) else "USD",
+            "currency_symbol": currency_symbol_for(clean),
+        }
         try:
             import yfinance as yf
 
@@ -92,6 +96,7 @@ def get_quote(symbol: str) -> Dict[str, Any]:
                 "change": round(change, 2),
                 "change_pct": round(change_pct, 2),
                 "source": "yahoo",
+                **quote_meta,
             }
         except Exception:
             mu, _ = _load_modules()
@@ -102,6 +107,7 @@ def get_quote(symbol: str) -> Dict[str, Any]:
                 "change": None,
                 "change_pct": None,
                 "source": "fallback",
+                **quote_meta,
             }
 
     return cached(f"quote:{clean}", ttl=120, producer=_produce)()

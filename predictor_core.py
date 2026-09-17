@@ -1047,7 +1047,7 @@ class AdvancedStockPredictor:
         try:
             # Check cache first if not forcing retrain
             if use_cache and not retrain and symbol:
-                cached_model, metadata = ModelCacheManager.load_model_from_cache(symbol, model_type)
+                cached_model, metadata = ModelCacheManager.load_model_from_cache(symbol, model_type, self.lookback_days)
                 if cached_model is not None:
                     self.model = cached_model
                     self.model_type = model_type
@@ -1179,14 +1179,14 @@ class AdvancedStockPredictor:
                     'training_samples': len(data),
                     'data_period': f"{data.index[0].date()} to {data.index[-1].date()}"
                 }
-                ModelCacheManager.save_model_to_cache(self.model, symbol, model_type, training_data_info, self.scaler)
+                ModelCacheManager.save_model_to_cache(self.model, symbol, model_type, training_data_info, self.scaler, self.lookback_days)
                 result['model_registry'] = register_model(
                     symbol=symbol,
                     model_type=self.model_type,
                     metrics=self.training_metrics,
                     feature_columns=self.feature_columns,
                     data=data,
-                    artifact_path=ModelCacheManager.get_model_cache_path(symbol, model_type),
+                    artifact_path=ModelCacheManager.get_model_cache_path(symbol, model_type, self.lookback_days),
                 )
 
             return result
@@ -1281,7 +1281,7 @@ class AdvancedStockPredictor:
         if not self.is_trained and symbol and use_cached_model:
             # Try to load from cache
             model_type = self.model_type or 'LSTM'
-            cached_model, metadata = ModelCacheManager.load_model_from_cache(symbol, model_type)
+            cached_model, metadata = ModelCacheManager.load_model_from_cache(symbol, model_type, self.lookback_days)
             if cached_model is not None:
                 self.model = cached_model
                 self.is_trained = True
@@ -1871,14 +1871,14 @@ class AdvancedStockPredictor:
         """Check if model is cached"""
         if not self.symbol or not self.model_type:
             return False
-        return ModelCacheManager.is_model_cached(self.symbol, self.model_type)
+        return ModelCacheManager.is_model_cached(self.symbol, self.model_type, lookback_days=self.lookback_days)
 
     def should_retrain_model(self):
         """Determine if model should be retrained"""
         # Simple logic - retrain if model is more than 7 days old
         if not self.symbol or not self.model_type:
             return True
-        return not ModelCacheManager.is_model_cached(self.symbol, self.model_type, max_age_hours=168)  # 7 days
+        return not ModelCacheManager.is_model_cached(self.symbol, self.model_type, max_age_hours=168, lookback_days=self.lookback_days)  # 7 days
 
     def _create_basic_fallback(self, symbol):
         """Create basic fallback forecast"""
@@ -2003,7 +2003,7 @@ def _create_comprehensive_report(symbol: str, current_price: float, forecast_df:
     
     currency = validation.get('currency', 'USD')
     is_indian_stock = currency == 'INR' or symbol.endswith('.NS') or symbol.endswith('.BO')
-    currency_symbol = 'â‚¹' if is_indian_stock else '$'
+    currency_symbol = '₹' if is_indian_stock else '$'
     
     # Technical analysis
     tech_analysis = _generate_technical_analysis(get_stock_data(symbol, period='6mo', include_technical=True), symbol)
@@ -2216,16 +2216,23 @@ def _get_enhanced_recommendation(expected_return: float, risk_level: str, signal
         return 'SELL'
 
 def _select_best_model_type(data: pd.DataFrame, symbol: str) -> str:
-    """Automatically select the best model type based on data characteristics"""
+    """Automatically select the best model type based on data characteristics.
+
+    Prophet is only chosen when it is actually installed (``PROPHET_AVAILABLE``);
+    otherwise short/high-volatility series fall through to an available neural
+    model instead of selecting a backend that cannot run.
+    """
     try:
-        if len(data) < 100:
+        use_prophet = PROPHET_AVAILABLE
+
+        if len(data) < 100 and use_prophet:
             return 'PROPHET'
-        
+
         volatility = data['Close'].pct_change().std() * np.sqrt(252)
         trend_strength = abs((data['Close'].iloc[-1] / data['Close'].iloc[0] - 1) * 100)
         data_complexity = volatility * trend_strength
-        
-        if data_complexity < 10:
+
+        if data_complexity < 10 and use_prophet:
             return 'PROPHET'
         elif data_complexity < 25:
             return 'GRU'
@@ -2233,7 +2240,7 @@ def _select_best_model_type(data: pd.DataFrame, symbol: str) -> str:
             return 'ENSEMBLE'
         else:
             return 'LSTM'
-            
+
     except Exception:
         return 'LSTM'
 

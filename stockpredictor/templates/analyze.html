@@ -17,7 +17,9 @@
             <div class="autocomplete">
                 <input type="text" id="symbol" name="symbol" required value="{{ symbol }}"
                        placeholder="AAPL, TSLA, MSFT, RELIANCE.NS"
-                       autocapitalize="characters" spellcheck="false" autocomplete="off">
+                       autocapitalize="characters" spellcheck="false" autocomplete="off"
+                       role="combobox" aria-expanded="false" aria-autocomplete="list"
+                       aria-controls="symbolSuggestions">
                 <ul class="autocomplete-list" id="symbolSuggestions" role="listbox" hidden></ul>
             </div>
             <p class="field-hint" id="symbolHint"></p>

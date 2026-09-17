@@ -14,6 +14,7 @@
         <button class="btn btn-outline" id="watchlistBtn"
                 data-symbol="{{ symbol }}"
                 data-in-watchlist="{{ 'true' if in_watchlist else 'false' }}"
+                aria-pressed="{{ 'true' if in_watchlist else 'false' }}"
                 onclick="toggleWatchlist()">
             {{ '⭐ In Watchlist' if in_watchlist else '☆ Add to Watchlist' }}
         </button>
@@ -268,8 +269,8 @@
     </div>
     <div class="form-row" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px;">
         <label>Horizon (days) <input type="number" id="mcHorizon" class="input" value="30" min="1" max="250" style="width:90px;"></label>
-        <label>Target $ <input type="number" id="mcTarget" class="input" placeholder="optional" step="0.01" style="width:110px;"></label>
-        <label>Stop $ <input type="number" id="mcStop" class="input" placeholder="optional" step="0.01" style="width:110px;"></label>
+        <label>Target {{ currency }} <input type="number" id="mcTarget" class="input" placeholder="optional" step="0.01" style="width:110px;"></label>
+        <label>Stop {{ currency }} <input type="number" id="mcStop" class="input" placeholder="optional" step="0.01" style="width:110px;"></label>
         <button class="btn btn-success" id="runMcBtn" onclick="StockPredictorAPI.runMonteCarlo()">▶ Simulate</button>
     </div>
     <div id="mcPanel"><p class="muted">Simulate forward price paths to see the 90% confidence band and target/stop probabilities.</p></div>
@@ -327,8 +328,8 @@
             {% endif %}
         </div>
         <div class="profile-stats">
-            {% if info.get('market_cap') %}<div><span>Market Cap</span><b>{{ info.get('market_cap') | money }}</b></div>{% endif %}
-            {% if info.get('enterprise_value') %}<div><span>Enterprise Value</span><b>{{ info.get('enterprise_value') | money }}</b></div>{% endif %}
+            {% if info.get('market_cap') %}<div><span>Market Cap</span><b>{{ info.get('market_cap') | money(currency) }}</b></div>{% endif %}
+            {% if info.get('enterprise_value') %}<div><span>Enterprise Value</span><b>{{ info.get('enterprise_value') | money(currency) }}</b></div>{% endif %}
             {% if info.get('employees') %}<div><span>Employees</span><b>{{ info.get('employees') | money }}</b></div>{% endif %}
             <div><span>Currency</span><b>{{ info.get('currency') or '—' }}</b></div>
             {% if info.get('ceo') %}<div><span>CEO</span><b>{{ info.get('ceo') }}</b></div>{% endif %}
@@ -534,6 +535,7 @@
                 if (data.success) {
                     const nowIn = !inWatchlist;
                     btn.setAttribute('data-in-watchlist', nowIn ? 'true' : 'false');
+                    btn.setAttribute('aria-pressed', nowIn ? 'true' : 'false');
                     btn.textContent = nowIn ? '⭐ In Watchlist' : '☆ Add to Watchlist';
                     showToast(data.message, 'success');
                 } else {

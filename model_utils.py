@@ -93,24 +93,28 @@ class ModelCacheManager:
         return os.path.join(MODEL_DIR, f"{safe_symbol}_{model_type}_{lookback_days}_metadata.json")
     
     @staticmethod
-    def is_model_cached(symbol: str, model_type: str, max_age_hours: int = 24) -> bool:
+    def is_model_cached(symbol: str, model_type: str, max_age_hours: int = 24,
+                        lookback_days: int = 60) -> bool:
         """Check if model is cached and not too old"""
-        model_path = ModelCacheManager.get_model_cache_path(symbol, model_type)
-        metadata_path = ModelCacheManager.get_model_metadata_path(symbol, model_type)
-        
+        model_path = ModelCacheManager.get_model_cache_path(symbol, model_type, lookback_days)
+        metadata_path = ModelCacheManager.get_model_metadata_path(symbol, model_type, lookback_days)
+
         if not os.path.exists(model_path) or not os.path.exists(metadata_path):
             return False
-        
+
         # Check if model is too old
         model_age = datetime.now() - datetime.fromtimestamp(os.path.getmtime(model_path))
         return model_age.total_seconds() < (max_age_hours * 3600)
-    
+
     @staticmethod
-    def save_model_to_cache(model, symbol: str, model_type: str, training_data_info: dict, scaler=None):
+    def save_model_to_cache(model, symbol: str, model_type: str, training_data_info: dict,
+                            scaler=None, lookback_days: int = None):
         """Save model and metadata to cache with proper scaler information"""
+        if lookback_days is None:
+            lookback_days = int(training_data_info.get('lookback_days', 60)) if training_data_info else 60
         try:
-            model_path = ModelCacheManager.get_model_cache_path(symbol, model_type)
-            metadata_path = ModelCacheManager.get_model_metadata_path(symbol, model_type)
+            model_path = ModelCacheManager.get_model_cache_path(symbol, model_type, lookback_days)
+            metadata_path = ModelCacheManager.get_model_metadata_path(symbol, model_type, lookback_days)
             
             # Save model
             if hasattr(model, 'save'):
@@ -155,12 +159,12 @@ class ModelCacheManager:
             return False
     
     @staticmethod
-    def load_model_from_cache(symbol: str, model_type: str):
+    def load_model_from_cache(symbol: str, model_type: str, lookback_days: int = 60):
         """Load model and metadata from cache"""
         try:
             import tensorflow as tf
-            model_path = ModelCacheManager.get_model_cache_path(symbol, model_type)
-            metadata_path = ModelCacheManager.get_model_metadata_path(symbol, model_type)
+            model_path = ModelCacheManager.get_model_cache_path(symbol, model_type, lookback_days)
+            metadata_path = ModelCacheManager.get_model_metadata_path(symbol, model_type, lookback_days)
             
             if not os.path.exists(model_path) or not os.path.exists(metadata_path):
                 return None, None
@@ -211,54 +215,64 @@ def _fetch_index_quotes(indices) -> Dict[str, Dict[str, Any]]:
     from production_core import cached
 
     prices: Dict[str, Dict[str, Any]] = {}
-    for symbol, name in indices.items():
-        cache_key = f"index:{symbol}"
 
-        def _fetch(sym: str, label: str) -> Dict[str, Any]:
-            try:
-                ticker = yf.Ticker(sym)
-                hist = ticker.history(period="5d", interval="1d")
-                if hist.empty or len(hist) < 2:
-                    raise ValueError(f"No data for {sym}")
-                closes = hist["Close"].dropna()
-                current = float(closes.iloc[-1])
-                prev = float(closes.iloc[-2])
-                change = current - prev
-                return {
-                    "symbol": sym,
-                    "name": label,
-                    "price": round(current, 2),
-                    "change": round(change, 2),
-                    "change_pct": round((change / prev) * 100 if prev else 0.0, 2),
-                    "high": round(float(hist["High"].max()), 2),
-                    "low": round(float(hist["Low"].min()), 2),
-                    "volume": int(hist["Volume"].sum()),
-                    "source": "yahoo",
-                    "timestamp": datetime.now().strftime("%H:%M:%S"),
-                }
-            except Exception as exc:  # pragma: no cover - network dependent
-                logger.warning("Index quote failed for %s: %s", sym, exc)
-                raise
-
+    def _fetch_one(sym: str, label: str) -> Dict[str, Any]:
         try:
-            prices[symbol] = cached(cache_key, ttl=300, producer=_fetch)(symbol, name)
-        except Exception:
-            continue
+            ticker = yf.Ticker(sym)
+            hist = ticker.history(period="5d", interval="1d")
+            if hist.empty or len(hist) < 2:
+                raise ValueError(f"No data for {sym}")
+            closes = hist["Close"].dropna()
+            current = float(closes.iloc[-1])
+            prev = float(closes.iloc[-2])
+            change = current - prev
+            return {
+                "symbol": sym,
+                "name": label,
+                "price": round(current, 2),
+                "change": round(change, 2),
+                "change_pct": round((change / prev) * 100 if prev else 0.0, 2),
+                "high": round(float(hist["High"].max()), 2),
+                "low": round(float(hist["Low"].min()), 2),
+                "volume": int(hist["Volume"].sum()),
+                "source": "yahoo",
+                "timestamp": datetime.now().strftime("%H:%M:%S"),
+            }
+        except Exception as exc:  # pragma: no cover - network dependent
+            logger.warning("Index quote failed for %s: %s", sym, exc)
+            raise
+
+    def _fetch_cached(sym: str, label: str) -> Dict[str, Any]:
+        cache_key = f"index:{sym}"
+        return cached(cache_key, ttl=300, producer=_fetch_one)(sym, label)
+
+    with ThreadPoolExecutor(max_workers=min(len(indices), 8)) as executor:
+        futures = {
+            executor.submit(_fetch_cached, sym, label): sym
+            for sym, label in indices.items()
+        }
+        for future in as_completed(futures):
+            sym = futures[future]
+            try:
+                prices[sym] = future.result()
+            except Exception:
+                continue
     return prices
 
 
 # Add this function to check if we should retrain
-def should_retrain_model(symbol: str, model_type: str, data_changed: bool = False, max_age_hours: int = 24) -> bool:
+def should_retrain_model(symbol: str, model_type: str, data_changed: bool = False,
+                         max_age_hours: int = 24, lookback_days: int = 60) -> bool:
     """
     Determine if model should be retrained
     Returns False if cached model is recent and data hasn't changed significantly
     """
     if data_changed:
         return True
-    
-    if not ModelCacheManager.is_model_cached(symbol, model_type, max_age_hours):
+
+    if not ModelCacheManager.is_model_cached(symbol, model_type, max_age_hours, lookback_days):
         return True
-    
+
     return False
 
 
@@ -3203,7 +3217,7 @@ def get_current_real_price(symbol: str) -> float:
                     if not data.empty and len(data) > 0:
                         price = float(data['Close'].iloc[-1])
                         if price > 0:
-                            print(f"âœ… REAL PRICE: {test_symbol} = â‚¹{price:.2f}")
+                            print(f"âœ… REAL PRICE: {test_symbol} = ₹{price:.2f}")
                             return price
                     
                     # Try historical data
@@ -3211,7 +3225,7 @@ def get_current_real_price(symbol: str) -> float:
                     if not hist.empty and len(hist) > 0:
                         price = float(hist['Close'].iloc[-1])
                         if price > 0:
-                            print(f"âœ… REAL PRICE: {test_symbol} = â‚¹{price:.2f}")
+                            print(f"âœ… REAL PRICE: {test_symbol} = ₹{price:.2f}")
                             return price
                             
                 except Exception as e:
@@ -3228,7 +3242,7 @@ def get_current_real_price(symbol: str) -> float:
         print("ðŸ”„ Trying direct API call...")
         real_price = _get_direct_api_price(symbol_clean)
         if real_price and real_price > 0:
-            print(f"âœ… REAL PRICE via API: {symbol_clean} = â‚¹{real_price:.2f}")
+            print(f"âœ… REAL PRICE via API: {symbol_clean} = ₹{real_price:.2f}")
             return real_price
     except Exception as e:
         print(f"[X] Direct API failed: {e}")
@@ -3236,7 +3250,7 @@ def get_current_real_price(symbol: str) -> float:
     # LAST RESORT: Realistic estimation based on actual market data
     print("ðŸŽ¯ Using intelligent estimation...")
     estimated_price = _get_intelligent_estimation(symbol_clean)
-    print(f"ðŸ“Š ESTIMATED: {symbol_clean} â‰ˆ â‚¹{estimated_price:.2f}")
+    print(f"ðŸ“Š ESTIMATED: {symbol_clean} â‰ˆ ₹{estimated_price:.2f}")
     return estimated_price
 
 def _get_direct_api_price(symbol: str) -> float:
@@ -3297,14 +3311,14 @@ def _get_intelligent_estimation(symbol: str) -> float:
     
     # Sector-based estimation using ACTUAL price ranges
     sector_ranges = {
-        'BANK': (200, 2000),      # Banks: â‚¹200-2000
-        'IT': (500, 5000),        # IT: â‚¹500-5000  
-        'PHARMA': (300, 3000),    # Pharma: â‚¹300-3000
-        'AUTO': (150, 2000),      # Auto: â‚¹150-2000
-        'ENERGY': (100, 3000),    # Energy: â‚¹100-3000
-        'FMCG': (200, 2500),      # FMCG: â‚¹200-2500
-        'METAL': (50, 1500),      # Metals: â‚¹50-1500
-        'CEMENT': (100, 1000),    # Cement: â‚¹100-1000
+        'BANK': (200, 2000),      # Banks: ₹200-2000
+        'IT': (500, 5000),        # IT: ₹500-5000  
+        'PHARMA': (300, 3000),    # Pharma: ₹300-3000
+        'AUTO': (150, 2000),      # Auto: ₹150-2000
+        'ENERGY': (100, 3000),    # Energy: ₹100-3000
+        'FMCG': (200, 2500),      # FMCG: ₹200-2500
+        'METAL': (50, 1500),      # Metals: ₹50-1500
+        'CEMENT': (100, 1000),    # Cement: ₹100-1000
     }
     
     # Detect sector from symbol
@@ -3344,7 +3358,7 @@ def _get_working_indian_stock_price(symbol: str) -> float:
                 price = info.get(field)
                 if price and float(price) > 0:
                     price_val = float(price)
-                    logger.info(f"âœ… {symbol_clean}: â‚¹{price_val:.2f} (Yahoo Finance)")
+                    logger.info(f"âœ… {symbol_clean}: ₹{price_val:.2f} (Yahoo Finance)")
                     return price_val
         except Exception:
             pass
@@ -3355,7 +3369,7 @@ def _get_working_indian_stock_price(symbol: str) -> float:
             if not hist.empty and 'Close' in hist.columns:
                 price_val = float(hist['Close'].iloc[-1])
                 if price_val > 0:
-                    logger.info(f"âœ… {symbol_clean}: â‚¹{price_val:.2f} (Historical)")
+                    logger.info(f"âœ… {symbol_clean}: ₹{price_val:.2f} (Historical)")
                     return price_val
         except Exception:
             pass
@@ -3366,12 +3380,12 @@ def _get_working_indian_stock_price(symbol: str) -> float:
     # Method 2: Known price database
     if symbol_clean in SymbolValidator.INDIAN_STOCKS_VALIDATION:
         known_price = SymbolValidator.INDIAN_STOCKS_VALIDATION[symbol_clean]['expected_price']
-        logger.info(f"âœ… {symbol_clean}: â‚¹{known_price:.2f} (Known Database)")
+        logger.info(f"âœ… {symbol_clean}: ₹{known_price:.2f} (Known Database)")
         return known_price
     
     # Method 3: Realistic estimation
     estimated_price = _estimate_realistic_indian_price(symbol_clean)
-    logger.info(f"ðŸŽ¯ {symbol_clean}: â‚¹{estimated_price:.2f} (Realistic Estimation)")
+    logger.info(f"ðŸŽ¯ {symbol_clean}: ₹{estimated_price:.2f} (Realistic Estimation)")
     return estimated_price
 
 def _get_alpha_vantage_price(symbol: str) -> float:
@@ -3463,7 +3477,7 @@ def _scrape_indian_stock_price_enhanced(symbol: str) -> float:
                             price_text = element.get_text().strip()
                             # Enhanced price extraction with multiple patterns
                             price_patterns = [
-                                r'â‚¹?\s*([\d,]+\.?\d*)',  # â‚¹1,234.56
+                                r'₹?\s*([\d,]+\.?\d*)',  # ₹1,234.56
                                 r'Rs\.?\s*([\d,]+\.?\d*)',  # Rs. 1,234.56
                                 r'INR\s*([\d,]+\.?\d*)',  # INR 1,234.56
                                 r'([\d,]+\.?\d*)\s*',  # 1234.56
@@ -3476,7 +3490,7 @@ def _scrape_indian_stock_price_enhanced(symbol: str) -> float:
                                         price_str = match.replace(',', '')
                                         price = float(price_str)
                                         # Validate it's a reasonable stock price
-                                        if 1 <= price <= 100000:  # â‚¹1 to â‚¹1,00,000 range
+                                        if 1 <= price <= 100000:  # ₹1 to ₹1,00,000 range
                                             return price
                                     except ValueError:
                                         continue
@@ -3548,7 +3562,7 @@ def _estimate_realistic_indian_price(symbol: str) -> float:
     estimated_price = max(10, estimated_price)
     estimated_price = round(estimated_price, 2)
     
-    logger.info(f"Realistic estimation for {clean_symbol}: {detected_sector} sector, â‚¹{estimated_price:.2f}")
+    logger.info(f"Realistic estimation for {clean_symbol}: {detected_sector} sector, ₹{estimated_price:.2f}")
     return estimated_price
 
 
@@ -3611,14 +3625,14 @@ def _get_indian_stock_current_price(symbol: str) -> float:
         hist = stock.history(period="1d")
         if not hist.empty and 'Close' in hist.columns and hist['Close'].iloc[0] > 0:
             price = float(hist['Close'].iloc[0])
-            logger.info(f"Got Indian stock price for {symbol} from Yahoo: â‚¹{price:.2f}")
+            logger.info(f"Got Indian stock price for {symbol} from Yahoo: ₹{price:.2f}")
             return price
     except Exception:
         pass
     
     # Fallback to estimated price
     estimated_price = SymbolValidator._estimate_indian_stock_price(symbol)
-    logger.info(f"Using estimated price for Indian stock {symbol}: â‚¹{estimated_price:.2f}")
+    logger.info(f"Using estimated price for Indian stock {symbol}: ₹{estimated_price:.2f}")
     return estimated_price
 
 def get_multiple_current_prices(symbols: list) -> dict:

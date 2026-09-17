@@ -60,7 +60,7 @@
                 <span class="chip-dot" style="background:{{ compare.colors[symbol] }}"></span>
                 {{ symbol }}
             </div>
-            <div class="metric-value">{{ "$%.2f" | format(quote.get('price', 0)) if quote.get('price') else '—' }}</div>
+            <div class="metric-value">{% if quote.get('price') %}{{ currency_symbol(symbol) }}{{ "%.2f" | format(quote.get('price')) }}{% else %}—{% endif %}</div>
             <div class="metric-change {{ 'trend-up' if pct is not none and pct >= 0 else ('trend-down' if pct is not none else 'trend-neutral') }}">
                 {% if pct is not none %}<span class="arrow">{{ '▲' if pct >= 0 else '▼' }}</span> {{ "%.2f" | format(pct) }}%{% else %}—{% endif %}
             </div>
@@ -121,7 +121,7 @@
                             {% endif %}
                             <td>
                                 {% if kind == 'money' and value is not none %}
-                                    <span class="mono">{{ "$%.2f" | format(value) }}</span>
+                                    <span class="mono">{{ currency_symbol(symbol) }}{{ "%.2f" | format(value) }}</span>
                                 {% elif kind == 'pct_colored' and value is not none %}
                                     <span class="mono {{ 'trend-up' if value >= 0 else 'trend-down' }}">{{ '▲' if value >= 0 else '▼' }} {{ "%.2f" | format(value) }}%</span>
                                 {% elif kind == 'score_colored' and value is not none %}
