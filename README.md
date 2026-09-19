@@ -8,7 +8,10 @@ analysis, portfolio tracking, watchlists, and model-artifact caching.
 > Forecasts and trading signals are **not financial advice**.
 
 **Public recruiter demo:** `/demo` when `PUBLIC_DEMO=true`. It is read-only;
-accounts and all write features require authentication.
+accounts and all write features require authentication. `/demo` only serves
+**precomputed** analyses (see [Public demo cache](#public-demo-cache)) — it
+never trains models, so a public visitor can never crash the shared worker
+with a live training run.
 
 ## Tech Stack
 
@@ -127,6 +130,40 @@ Configure these variables in the provider dashboard:
 | `SESSION_COOKIE_SECURE` | `true` |
 | `WEB_CONCURRENCY` | `1` |
 | `ENABLE_ALERT_SCHEDULER` | `false` |
+
+## Public demo cache
+
+The free-tier worker only has ~512 MB of RAM, and a full 100-epoch AUTO
+training run (~78k params) can OOM-kill the process mid-request. The public
+`/demo` route therefore reads precomputed JSON only and `/analyze` (authenticated
+live training) is kept deliberately small.
+
+Refresh the demo cache offline (it does real, slow training):
+
+```bash
+python scripts/precompute_demo_cache.py                # whole demo set
+python scripts/precompute_demo_cache.py --tickers AAPL MSFT
+python scripts/precompute_demo_cache.py --days 30 --period 1y --model-type AUTO
+```
+
+This writes one JSON file per ticker under `data_cache/demo_precomputed/`
+(overwriting any previous run — safe to re-run weekly) and commits nothing.
+Out-of-set tickers are rejected with a 400 on `/demo/analyze`; a missing cached
+file renders a clear "not ready yet" page. The demo set lives in
+`stockpredictor/services/demo_cache.py`.
+
+Live training knobs, so `/analyze` never exceeds the worker while staying
+configurable on bigger instances:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `TRAIN_EPOCHS` | `20` | down from a hard-coded 100 |
+| `TRAIN_BATCH_SIZE` | `32` | smaller batches use less memory per step |
+| `EARLY_STOPPING_PATIENCE` | `5` | down from 20; stops once loss plateaus |
+
+After every job the worker frees TensorFlow/Keras graph state and only one
+training job runs at a time — a second request is queued briefly, then answers
+"another analysis is in progress" instead of doubling memory pressure.
 
 The Docker command starts the Flask WSGI app (`gunicorn ... wsgi:app`), never a
 Streamlit entry point. Render/Railway's injected `PORT` is honored automatically.

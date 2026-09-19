@@ -23,6 +23,31 @@
     </div>
 </div>
 
+{% if demo_mode %}
+<section class="card">
+    <div class="card-header">
+        <h2><span class="card-emoji">⚡</span> Try a Precomputed Analysis</h2>
+        <span class="pill pill-green">instant · cached</span>
+    </div>
+    <p class="field-hint" style="margin-bottom:10px;">
+        Pick a symbol to view a ready-made AI forecast — results are served from a precomputed
+        cache, so they appear instantly and never train on this server.
+    </p>
+    <form method="GET" action="{{ url_for('dashboard.demo_analyze') }}" id="demoAnalyzeForm">
+        <div class="form-group">
+            <label for="demo_symbol">Choose a Symbol</label>
+            <select id="demo_symbol" name="symbol" required>
+                {% for ticker in demo_tickers %}
+                <option value="{{ ticker }}">{{ ticker }}</option>
+                {% endfor %}
+            </select>
+            <p class="field-hint">US + Indian tickers are precomputed for the demo.</p>
+        </div>
+        <button type="submit" class="btn btn-success">🔍 View Analysis</button>
+    </form>
+</section>
+{% endif %}
+
 <div class="grid stats-grid">
     <div class="metric-card">
         <div class="metric-label">Watchlist</div>

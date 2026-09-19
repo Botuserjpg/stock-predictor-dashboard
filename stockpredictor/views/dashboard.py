@@ -4,12 +4,13 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from ..services import alerts as alerts_service
 from ..services import stocks
 from ..services.auth import user_store
+from ..services.demo_cache import list_demo_tickers
 
 bp = Blueprint("dashboard", __name__)
 
@@ -44,6 +45,57 @@ def home():
 def demo():
     """Read-only public dashboard preview for portfolio and résumé deployments."""
     return _render_dashboard("Guest", demo_mode=True)
+
+
+@bp.route("/demo/analyze", methods=["GET", "POST"])
+def demo_analyze():
+    """Serve a precomputed analysis for one fixed demo ticker.
+
+    Lockdown: this route only ever reads ``data_cache/demo_precomputed`` JSON
+    written offline by ``scripts/precompute_demo_cache.py``. Tickers outside
+    the fixed demo set are rejected with a 400 and are never trained live, so a
+    public visitor can never trigger a model-training run that would OOM the
+    shared worker.
+    """
+    from ..services.demo_cache import get_demo_result
+
+    symbol = (request.values.get("symbol") or "").strip().upper()
+    if symbol not in list_demo_tickers():
+        return (
+            render_template(
+                "error.html",
+                title="Symbol Not Available in Demo",
+                message=(
+                    f'"{symbol}" is not part of the public demo set. '
+                    "Choose one of the precomputed symbols below to view its analysis."
+                ),
+                back_url=url_for("dashboard.demo"),
+            ),
+            400,
+        )
+
+    try:
+        result = get_demo_result(symbol)
+    except FileNotFoundError:
+        return (
+            render_template(
+                "error.html",
+                title="Analysis Not Ready Yet",
+                message=(
+                    f"The precomputed analysis for {symbol} is not available yet. "
+                    "It gets refreshed periodically; please try another symbol or check back later."
+                ),
+                back_url=url_for("dashboard.demo"),
+            ),
+            404,
+        )
+
+    return render_template(
+        "demo_results.html",
+        symbol=symbol,
+        result=result,
+        demo_tickers=list_demo_tickers(),
+    )
 
 
 def _render_dashboard(email: str, demo_mode: bool = False):
@@ -91,4 +143,5 @@ def _render_dashboard(email: str, demo_mode: bool = False):
         alerts=alerts,
         email=email,
         demo_mode=demo_mode,
+        demo_tickers=list_demo_tickers(),
     )

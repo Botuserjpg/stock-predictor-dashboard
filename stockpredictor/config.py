@@ -98,6 +98,13 @@ class Settings:
         self.REALTIME_PUSH_SECONDS = self._env_int("REALTIME_PUSH_SECONDS", 10)
         self.REALTIME_MAX_SYMBOLS = self._env_int("REALTIME_MAX_SYMBOLS", 20)
 
+        # Live model training on /analyze is intentionally small: a full 100-epoch
+        # AUTO run (~78k params) can exceed the free-tier worker's 512MB budget
+        # and get OOM-killed mid-request. These env vars shrink/raise it safely.
+        self.TRAIN_EPOCHS = max(1, self._env_int("TRAIN_EPOCHS", 20))
+        self.TRAIN_BATCH_SIZE = max(1, self._env_int("TRAIN_BATCH_SIZE", 32))
+        self.EARLY_STOPPING_PATIENCE = max(1, self._env_int("EARLY_STOPPING_PATIENCE", 5))
+
     @staticmethod
     def _env_str(name: str, default: str = "") -> str:
         value = os.getenv(name)
@@ -159,4 +166,7 @@ class Settings:
             "ENABLE_REALTIME_PUSH": self.ENABLE_REALTIME_PUSH,
             "REALTIME_PUSH_SECONDS": self.REALTIME_PUSH_SECONDS,
             "REALTIME_MAX_SYMBOLS": self.REALTIME_MAX_SYMBOLS,
+            "TRAIN_EPOCHS": self.TRAIN_EPOCHS,
+            "TRAIN_BATCH_SIZE": self.TRAIN_BATCH_SIZE,
+            "EARLY_STOPPING_PATIENCE": self.EARLY_STOPPING_PATIENCE,
         }

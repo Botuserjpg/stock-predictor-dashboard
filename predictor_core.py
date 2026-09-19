@@ -45,6 +45,46 @@ logger = logging.getLogger(__name__)
 MODEL_DIR = os.path.join(os.getcwd(), "models")
 os.makedirs(MODEL_DIR, exist_ok=True)
 
+# ======================
+# TRAINING RESOURCE GUARDS
+#
+# The live /analyze route trains LSTM/GRU models on a single 512MB free-tier
+# worker. A full 100-epoch AUTO run (~78k parameters) can exceed the worker's
+# memory budget and render OOM-kills the process mid-request. Training size is
+# therefore env-configurable with small defaults, and OOM/resource errors get a
+# graceful "please try again" response instead of a crash.
+# ======================
+
+
+def _env_positive_int(name: str, default: int) -> int:
+    try:
+        value = int(os.getenv(name, default))
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+class ModelResourceError(RuntimeError):
+    """Raised when model training exhausts instance memory (OOM)."""
+
+
+def release_tf_memory() -> None:
+    """Best-effort release of TensorFlow/Keras graph state and Python objects.
+
+    Called after every training run so model/optimizer state does not
+    accumulate on the worker across sequential /analyze requests.
+    """
+    try:
+        tf.keras.backend.clear_session()
+    except Exception:
+        pass
+    try:
+        import gc
+
+        gc.collect()
+    except Exception:
+        pass
+
 # Fix Prophet import
 try:
     from prophet import Prophet
@@ -1037,11 +1077,19 @@ class AdvancedStockPredictor:
             return {'error': str(e), 'is_trained': False}
 
     def train(self, data: pd.DataFrame, model_type: str = 'LSTM', symbol: str = None,
-              epochs: int = 100, batch_size: int = 32, validation_split: float = 0.2,
-              retrain: bool = False, early_stopping_patience: int = 20,
+              epochs: int = None, batch_size: int = None, validation_split: float = 0.2,
+              retrain: bool = False, early_stopping_patience: int = None,
               use_cache: bool = True) -> Dict[str, Any]:
-        """Train the selected model type on historical data with enhanced features and caching support"""
-        
+        """Train the selected model type on historical data with enhanced features and caching support.
+
+        ``epochs``/``batch_size``/``early_stopping_patience`` default from the
+        TRAIN_EPOCHS / TRAIN_BATCH_SIZE / EARLY_STOPPING_PATIENCE env vars (kept
+        small so live training stays inside the free-tier worker's memory).
+        """
+        epochs = _env_positive_int("TRAIN_EPOCHS", 20) if epochs is None else epochs
+        batch_size = _env_positive_int("TRAIN_BATCH_SIZE", 32) if batch_size is None else batch_size
+        early_stopping_patience = _env_positive_int("EARLY_STOPPING_PATIENCE", 5) if early_stopping_patience is None else early_stopping_patience
+
         self.symbol = symbol  # Store symbol for caching
         
         try:
@@ -1087,53 +1135,58 @@ class AdvancedStockPredictor:
 
             # Build model based on type
             self.model_type = model_type.upper()
-            
-            if self.model_type == 'LSTM':
-                self.model = self.build_enhanced_lstm_model((X_train.shape[1], X_train.shape[2]))
-            elif self.model_type == 'GRU':
-                self.model = self.build_enhanced_gru_model((X_train.shape[1], X_train.shape[2]))
-            elif self.model_type == 'ENSEMBLE':
-                self.model = self.build_hybrid_ensemble_model((X_train.shape[1], X_train.shape[2]))
-            else:
-                self.model = self.build_enhanced_lstm_model((X_train.shape[1], X_train.shape[2]))
 
-            logger.info(f"Built {self.model_type} model with {self.model.count_params():,} parameters")
+            try:
+                if self.model_type == 'LSTM':
+                    self.model = self.build_enhanced_lstm_model((X_train.shape[1], X_train.shape[2]))
+                elif self.model_type == 'GRU':
+                    self.model = self.build_enhanced_gru_model((X_train.shape[1], X_train.shape[2]))
+                elif self.model_type == 'ENSEMBLE':
+                    self.model = self.build_hybrid_ensemble_model((X_train.shape[1], X_train.shape[2]))
+                else:
+                    self.model = self.build_enhanced_lstm_model((X_train.shape[1], X_train.shape[2]))
 
-            # Enhanced callbacks for better training
-            callbacks = [
-                EarlyStopping(
-                    monitor='val_loss',
-                    patience=early_stopping_patience,
-                    restore_best_weights=True,
-                    verbose=1
-                ),
-                ReduceLROnPlateau(
-                    monitor='val_loss',
-                    factor=0.5,
-                    patience=10,
-                    min_lr=1e-7,
-                    verbose=1
-                ),
-                ModelCheckpoint(
-                    filepath=os.path.join(MODEL_DIR, f'temp_best_{self.model_type}.h5'),
-                    monitor='val_loss',
-                    save_best_only=True,
-                    verbose=1
+                logger.info(f"Built {self.model_type} model with {self.model.count_params():,} parameters")
+
+                # Enhanced callbacks for better training
+                callbacks = [
+                    EarlyStopping(
+                        monitor='val_loss',
+                        patience=early_stopping_patience,
+                        restore_best_weights=True,
+                        verbose=1
+                    ),
+                    ReduceLROnPlateau(
+                        monitor='val_loss',
+                        factor=0.5,
+                        patience=10,
+                        min_lr=1e-7,
+                        verbose=1
+                    ),
+                    ModelCheckpoint(
+                        filepath=os.path.join(MODEL_DIR, f'temp_best_{self.model_type}.h5'),
+                        monitor='val_loss',
+                        save_best_only=True,
+                        verbose=1
+                    )
+                ]
+
+                # Train model
+                start_time = time.time()
+                history = self.model.fit(
+                    X_train, y_train,
+                    epochs=epochs,
+                    batch_size=batch_size,
+                    validation_data=(X_val, y_val),
+                    callbacks=callbacks,
+                    verbose=1,
+                    shuffle=True
                 )
-            ]
-
-            # Train model
-            start_time = time.time()
-            history = self.model.fit(
-                X_train, y_train,
-                epochs=epochs,
-                batch_size=batch_size,
-                validation_data=(X_val, y_val),
-                callbacks=callbacks,
-                verbose=1,
-                shuffle=True
-            )
-            training_time = time.time() - start_time
+                training_time = time.time() - start_time
+            except (MemoryError, tf.errors.ResourceExhaustedError) as exc:
+                release_tf_memory()
+                logger.error(f"Out-of-memory while training {symbol or self.model_type}: {exc}")
+                raise ModelResourceError("Analysis temporarily unavailable, please try again.") from exc
 
             self.is_trained = True
             self.training_history = history.history
@@ -1191,6 +1244,9 @@ class AdvancedStockPredictor:
 
             return result
 
+        except ModelResourceError:
+            release_tf_memory()
+            raise
         except Exception as e:
             logger.error(f"Error training model: {str(e)}")
             return {'error': str(e), 'is_trained': False}
@@ -2407,21 +2463,33 @@ async def generate_forecast_report(symbol: str, days: int = 30,
         
         # 4. Continue with existing logic but use sentiment-aware predictor
         predictor = AdvancedStockPredictor()
-        
-        # Train or load model (sentiment features already in data)
-        training_result = predictor.train(
-            data, model_type=model_type, symbol=symbol,
-            retrain=retrain, use_cache=use_model_cache
-        )
-        
-        # 5. PREDICT WITH FRESH SENTIMENT AND TRADING STRATEGY
-        print("ðŸŽ¯ MAKING PREDICTION WITH CURRENT SENTIMENT AND TRADING SIGNALS...")
-        
-        # Use predict_with_trading_signals instead of predict_with_fresh_sentiment
-        prediction_result = predictor.predict_with_trading_signals(
-            data, days=days, current_price=current_price, symbol=symbol,
-            trading_strategy=trading_strategy
-        )
+
+        # OOM guard: build + train + predict is the memory-hot section. On a
+        # resource failure we free TF state and raise a friendly error so the
+        # free-tier worker is not OOM-killed mid-request.
+        try:
+            training_result = predictor.train(
+                data, model_type=model_type, symbol=symbol,
+                retrain=retrain, use_cache=use_model_cache,
+                epochs=_env_positive_int("TRAIN_EPOCHS", 20),
+                batch_size=_env_positive_int("TRAIN_BATCH_SIZE", 32),
+                early_stopping_patience=_env_positive_int("EARLY_STOPPING_PATIENCE", 5),
+            )
+
+            # 5. PREDICT WITH FRESH SENTIMENT AND TRADING STRATEGY
+            print("ðŸŽ¯ MAKING PREDICTION WITH CURRENT SENTIMENT AND TRADING SIGNALS...")
+
+            # Use predict_with_trading_signals instead of predict_with_fresh_sentiment
+            prediction_result = predictor.predict_with_trading_signals(
+                data, days=days, current_price=current_price, symbol=symbol,
+                trading_strategy=trading_strategy
+            )
+        except (MemoryError, tf.errors.ResourceExhaustedError) as exc:
+            release_tf_memory()
+            logger.error(f"Out-of-memory while generating forecast for {symbol}: {exc}")
+            raise ModelResourceError("Analysis temporarily unavailable, please try again.") from exc
+        finally:
+            release_tf_memory()
         
         # 6. Check if predictions are valid
         if prediction_result.get('error') or prediction_result.get('predictions') is None:
@@ -2468,6 +2536,9 @@ async def generate_forecast_report(symbol: str, days: int = 30,
         
         return forecast_df, report, f"{symbol}_forecast.csv"
         
+    except ModelResourceError:
+        release_tf_memory()
+        raise
     except Exception as e:
         print(f"[X] Forecast with sentiment failed: {e}")
         import traceback
