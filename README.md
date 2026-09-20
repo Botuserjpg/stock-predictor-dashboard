@@ -147,7 +147,9 @@ python scripts/precompute_demo_cache.py --days 30 --period 1y --model-type AUTO
 ```
 
 This writes one JSON file per ticker under `data_cache/demo_precomputed/`
-(overwriting any previous run — safe to re-run weekly) and commits nothing.
+(overwriting any previous run — safe to re-run weekly). The precomputed results
+are committed (see the `.gitignore` exception under `data_cache/`) so every
+fresh deploy ships the demo out of the box — refresh the cache, commit, redeploy.
 Out-of-set tickers are rejected with a 400 on `/demo/analyze`; a missing cached
 file renders a clear "not ready yet" page. The demo set lives in
 `stockpredictor/services/demo_cache.py`.

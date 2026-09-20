@@ -28,7 +28,9 @@ model_registry/
 *.db
 
 # Generated data/model artifacts
-data_cache/
+data_cache/*
+!data_cache/demo_precomputed/
+!data_cache/demo_precomputed/**
 model_cache/
 saved_models/
 models/*.h5

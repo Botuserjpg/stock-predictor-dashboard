@@ -73,6 +73,31 @@ def demo_read(symbol: str) -> Dict[str, Any]:
         raise FileNotFoundError(f"No precomputed analysis cached for {clean}") from exc
 
 
+def _coerce_keys(value):
+    """Recursively make every dict key JSON-safe.
+
+    pandas Timestamps (and any other non-basestring) used as dict keys crash
+    ``json.dump`` (``keys must be str, int, float, bool or None``) even with
+    ``default=str``, because the value hook never applies to keys. Financial
+    statement periods arrive keyed by ``Timestamp``; normalize them to ISO
+    date strings, which the ``ymd`` template filter renders identically.
+    """
+    if isinstance(value, dict):
+        out: Dict[Any, Any] = {}
+        for key, item in value.items():
+            if isinstance(key, (str, int, float, bool)) or key is None:
+                safe_key = key
+            elif hasattr(key, "isoformat"):
+                safe_key = str(key.isoformat())
+            else:
+                safe_key = str(key)
+            out[safe_key] = _coerce_keys(item)
+        return out
+    if isinstance(value, list):
+        return [_coerce_keys(item) for item in value]
+    return value
+
+
 def demo_write(symbol: str, result: Dict[str, Any]) -> Path:
     """Atomically persist one precomputed demo result (overwrites, never appends)."""
     clean = (symbol or "").strip().upper()
@@ -99,19 +124,17 @@ def build_demo_result(
     """
     from ..services import sentiment as sentiment_service
     from ..services import stocks
-    from ..services.llm_report import rule_based_summary
-    from ..services.regime import auto_select_model, detect_regime
 
     report = stocks.predict_forecast(
         symbol, period, days, risk, model_type=model_type,
     )
     if not isinstance(report, dict) or report.get("error"):
-        return {
+        return _coerce_keys({
             "symbol": symbol,
             "error": report.get("error") if isinstance(report, dict) else "Prediction failed",
             "message": report.get("message") if isinstance(report, dict) else "",
             "forecast_rows": report.get("forecast_rows", []) if isinstance(report, dict) else [],
-        }
+        })
 
     technical: Dict[str, Any] = {}
     sentiment: Dict[str, Any] = {}
@@ -158,7 +181,7 @@ def build_demo_result(
         symbol, price_history, report, technical, sentiment,
     )
 
-    return {
+    return _coerce_keys({
         "symbol": symbol,
         "params": {"period": period, "days": days, "risk": risk, "model_type": (model_type or "AUTO").upper()},
         "report": report,
@@ -171,11 +194,13 @@ def build_demo_result(
         "analyst_report": analyst_report,
         "source": "precomputed",
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
+    })
 
 
 def _demo_enrich(symbol, price_history, report, technical, sentiment):
     """Mirror the dashboard's regime/model/analyst enrichment with safe fallbacks."""
+    from ..services.llm_report import rule_based_summary
+    from ..services.regime import auto_select_model, detect_regime
     closes: List[float] = []
     for row in price_history or []:
         try:

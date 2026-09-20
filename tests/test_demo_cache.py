@@ -268,5 +268,54 @@ class SettingsKnobTests(unittest.TestCase):
             self.assertEqual(Settings().TRAIN_BATCH_SIZE, 1)
 
 
+class _IsoKey:
+    """Stand-in for a pandas Timestamp: json can't serialize it as a dict key."""
+
+    def __init__(self, text):
+        self._text = text
+
+    def isoformat(self):
+        return self._text
+
+    def __repr__(self):
+        return f"Timestamp('{self._text}')"
+
+
+class JsonKeyCoercionTests(unittest.TestCase):
+    def test_coerce_keys_flattens_timestamp_keys_to_iso_strings(self):
+        payload = {
+            "report": {
+                "forecast_rows": [{"Date": "2026-01-02", "Predicted_Price": 101.0}],
+            },
+            "fundamentals": {
+                "financial_statements": {
+                    "income_statement": {
+                        _IsoKey("2025-09-30"): {"Revenue": 100000},
+                        _IsoKey("2024-09-30"): {"Revenue": 90000},
+                    }
+                }
+            },
+        }
+        coerced = demo_cache._coerce_keys(payload)
+        income = coerced["fundamentals"]["financial_statements"]["income_statement"]
+        self.assertIn("2025-09-30", income)
+        self.assertNotIn(_IsoKey("2025-09-30"), income)
+        # Round trip through the real writer produce JSON-safe keys.
+        tmp = Path(_TMP_DIR) / "coerce_write"
+        with patch.object(demo_cache, "DEMO_CACHE_DIR", tmp):
+            demo_cache.demo_write("AAPL", coerced)
+            with (tmp / "AAPL.json").open("r", encoding="utf-8") as fh:
+                reloaded = json.load(fh)
+        self.assertEqual(reloaded["fundamentals"]["financial_statements"]["income_statement"]["2025-09-30"]["Revenue"], 100000)
+
+    def test_coerce_keys_is_json_dump_safe(self):
+        payload = {"nested": {_IsoKey("2026-01-02"): 3}}
+        with self.assertRaises(TypeError):
+            json.dumps(payload, default=str)
+        coerced = demo_cache._coerce_keys(payload)
+        dumped = json.dumps(coerced, default=str)
+        self.assertIn("2026-01-02", dumped)
+
+
 if __name__ == "__main__":
     unittest.main()
