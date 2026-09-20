@@ -22,12 +22,12 @@
 {% macro accent_picker() %}
 <div class="accent-picker" id="accentPicker">
     <div class="accent-swatches" id="accentSwatches" hidden>
-        <button type="button" class="accent-swatch" data-accent="blue" title="Blue" style="background:linear-gradient(135deg,#38bdf8,#818cf8)"></button>
-        <button type="button" class="accent-swatch" data-accent="violet" title="Violet" style="background:linear-gradient(135deg,#a78bfa,#f472b6)"></button>
-        <button type="button" class="accent-swatch" data-accent="indigo" title="Indigo" style="background:linear-gradient(135deg,#818cf8,#c084fc)"></button>
-        <button type="button" class="accent-swatch" data-accent="teal" title="Teal" style="background:linear-gradient(135deg,#2dd4bf,#38bdf8)"></button>
-        <button type="button" class="accent-swatch" data-accent="gold" title="Gold" style="background:linear-gradient(135deg,#f5c542,#fb923c)"></button>
-        <button type="button" class="accent-swatch" data-accent="rose" title="Rose" style="background:linear-gradient(135deg,#fb7185,#f472b6)"></button>
+        <button type="button" class="accent-swatch" data-accent="blue" title="Blue" aria-label="Set accent color to blue" style="background:linear-gradient(135deg,#38bdf8,#818cf8)"></button>
+        <button type="button" class="accent-swatch" data-accent="violet" title="Violet" aria-label="Set accent color to violet" style="background:linear-gradient(135deg,#a78bfa,#f472b6)"></button>
+        <button type="button" class="accent-swatch" data-accent="indigo" title="Indigo" aria-label="Set accent color to indigo" style="background:linear-gradient(135deg,#818cf8,#c084fc)"></button>
+        <button type="button" class="accent-swatch" data-accent="teal" title="Teal" aria-label="Set accent color to teal" style="background:linear-gradient(135deg,#2dd4bf,#38bdf8)"></button>
+        <button type="button" class="accent-swatch" data-accent="gold" title="Gold" aria-label="Set accent color to gold" style="background:linear-gradient(135deg,#f5c542,#fb923c)"></button>
+        <button type="button" class="accent-swatch" data-accent="rose" title="Rose" aria-label="Set accent color to rose" style="background:linear-gradient(135deg,#fb7185,#f472b6)"></button>
     </div>
     <button type="button" class="accent-toggle" id="accentToggle" aria-label="Change accent color" title="Accent color"><span class="accent-dot"></span></button>
 </div>
@@ -114,7 +114,7 @@
 <div class="toast-stack" id="toastStack" role="status" aria-live="polite" aria-atomic="false"></div>
 <button class="back-to-top" id="backToTop" aria-label="Back to top">↑</button>
 
-<script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+{% block vendor_scripts %}{% endblock %}
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 {% block scripts %}{% endblock %}
 </body>

@@ -5,6 +5,7 @@ renders a normalized overlay chart so relative momentum is easy to eyeball.
 """
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
@@ -17,6 +18,8 @@ from ..services import sentiment as sentiment_service
 from ..services import stocks
 
 bp = Blueprint("compare", __name__)
+
+logger = logging.getLogger("stockpredictor.views.compare")
 
 MAX_SYMBOLS = 5
 _MIN_SYMBOLS = 2
@@ -48,19 +51,19 @@ def _collect(symbol: str) -> Dict[str, Any]:
     try:
         quote = stocks.get_quote(symbol)
     except Exception:
-        pass
+        logger.warning("Compare: quote fetch failed for %s", symbol)
     try:
         technical = stocks.get_technical_analysis(symbol, period="6mo")
     except Exception:
-        pass
+        logger.warning("Compare: technical analysis failed for %s", symbol)
     try:
         sentiment = sentiment_service.get_sentiment(symbol)
     except Exception:
-        pass
+        logger.warning("Compare: sentiment failed for %s", symbol)
     try:
         history = stocks.get_price_history(symbol, period="3mo", limit=60)
     except Exception:
-        pass
+        logger.warning("Compare: price history failed for %s", symbol)
 
     closes = _normalize(history)
     return {

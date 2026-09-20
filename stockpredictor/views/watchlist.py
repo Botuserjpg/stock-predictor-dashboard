@@ -1,6 +1,7 @@
 """Watchlist blueprint: page + JSON API for per-user symbol lists."""
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from flask import Blueprint, current_app, jsonify, render_template, request
@@ -13,6 +14,8 @@ from ..services import stocks
 from ..services.auth import user_store
 
 bp = Blueprint("watchlist", __name__)
+
+logger = logging.getLogger("stockpredictor.views.watchlist")
 
 _MAX_WORKERS = 6
 
@@ -27,7 +30,7 @@ def _fetch_quote(symbol: str) -> dict:
     try:
         quote = stocks.get_quote(symbol)
     except Exception:
-        pass
+        logger.debug("Watchlist: quote fetch failed for %s", symbol)
     return {
         "symbol": symbol,
         "price": quote.get("price"),

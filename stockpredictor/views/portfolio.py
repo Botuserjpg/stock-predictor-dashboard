@@ -1,6 +1,7 @@
 """Portfolio blueprint: paper-trading page + JSON API."""
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from flask import Blueprint, current_app, jsonify, render_template, request
@@ -13,6 +14,8 @@ from ..services import stocks
 from ..services.portfolio import DEFAULT_CASH, equity_curve, get_portfolio, save_portfolio, score_position_signal
 
 bp = Blueprint("portfolio", __name__)
+
+logger = logging.getLogger("stockpredictor.views.portfolio")
 
 _MAX_WORKERS = 6
 
@@ -27,6 +30,7 @@ def _resolve_price(symbol: str, requested: float) -> float:
     try:
         return float(stocks.get_current_price(symbol))
     except Exception:
+        logger.warning("Portfolio: could not resolve price for %s", symbol)
         return 0.0
 
 
@@ -37,15 +41,15 @@ def _fetch_position(symbol: str) -> dict:
     try:
         result["price"] = float(stocks.get_current_price(symbol))
     except Exception:
-        pass
+        logger.debug("Portfolio: current price failed for %s", symbol)
     try:
         result["ta"] = stocks.get_technical_analysis(symbol)
     except Exception:
-        pass
+        logger.debug("Portfolio: technical analysis failed for %s", symbol)
     try:
         result["sentiment"] = sentiment_service.get_sentiment(symbol)
     except Exception:
-        pass
+        logger.debug("Portfolio: sentiment failed for %s", symbol)
     try:
         history = stocks.get_price_history(symbol, period="3mo", limit=30) or []
         closes = []
@@ -58,7 +62,7 @@ def _fetch_position(symbol: str) -> dict:
                 closes.append(close)
         result["closes"] = closes[-30:]
     except Exception:
-        pass
+        logger.debug("Portfolio: price history failed for %s", symbol)
     return result
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
 from flask import session
@@ -33,15 +34,24 @@ def _user_email() -> str:
     return user_id if isinstance(user_id, str) and user_id else ""
 
 
+def _one_quote(symbol: str) -> Dict[str, Any]:
+    """Quote for a single symbol, degrading to an empty dict (never raises)."""
+    try:
+        return stocks.get_quote(symbol) or {}
+    except Exception:
+        logger.debug("Realtime: quote fetch failed for %s", symbol)
+        return {}
+
+
 def collect_quotes(app, email: str, max_symbols: int) -> List[Dict[str, Any]]:
     """Live quote payload for a user's watchlist (TTL-cached per symbol)."""
     symbols = user_store.watchlists().get(email, [])[:max_symbols]
     quotes: List[Dict[str, Any]] = []
-    for symbol in symbols:
-        try:
-            quote = stocks.get_quote(symbol) or {}
-        except Exception:
-            quote = {}
+    if not symbols:
+        return quotes
+    with ThreadPoolExecutor(max_workers=min(6, len(symbols))) as pool:
+        fetched = list(pool.map(_one_quote, symbols))
+    for quote in fetched:
         if quote.get("price") is not None:
             quotes.append(quote)
     return quotes

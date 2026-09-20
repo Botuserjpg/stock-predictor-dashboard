@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Portfolio — {{ app_name }}{% endblock %}
+{% if rows %}
+{% block vendor_scripts %}
+    <script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+{% endblock %}
+{% endif %}
 {% block content %}
 <div class="page-header">
     <h1>💼 Your Paper Portfolio</h1>
@@ -74,7 +79,7 @@
                 </div>
                 <div class="insight-score">Composite score <strong>{{ ins.score }}/100</strong></div>
                 <div class="mini-bar insight-bar">
-                    <div class="mini-fill" style="width: {{ ins.score }}%; background: {{ 'var(--up)' if ins.score >= 60 else ('var(--gold)' if ins.score >= 45 else 'var(--down)') }};"></div>
+                    <div class="mini-fill {{ 's-mini-up' if ins.score >= 60 else ('s-mini-gold' if ins.score >= 45 else 's-mini-down') }}" style="width: {{ ins.score }}%;"></div>
                 </div>
                 <ul class="reason-list">
                     {% for reason in ins.reasons %}<li>{{ reason }}</li>{% endfor %}
@@ -113,7 +118,7 @@
                 <input type="number" id="tradePrice" placeholder="Auto-fetch" min="0" step="any">
             </div>
         </div>
-        <div class="inline-form">
+        <div class="inline-form portfolio-trade-actions">
             <button type="button" class="btn btn-success" onclick="trade('BUY')">Buy</button>
             <button type="button" class="btn btn-danger" onclick="trade('SELL')">Sell</button>
         </div>
@@ -122,7 +127,8 @@
 
     <section class="card">
         <h2>Cash Management</h2>
-        <div class="inline-form">
+        <div class="inline-form cash-move-actions">
+            <label for="cashAmount" class="sr-only">Amount to deposit or withdraw</label>
             <input type="number" id="cashAmount" placeholder="Amount $" min="0" step="any">
             <button type="button" class="btn btn-secondary" onclick="cashMove('deposit')">Deposit</button>
             <button type="button" class="btn btn-outline" onclick="cashMove('withdraw')">Withdraw</button>
@@ -181,7 +187,8 @@
             </table>
         </div>
     {% else %}
-        <p class="muted">No positions yet. Buy your first stock above to get started.</p>
+        <p class="muted">No positions yet. Use the Trade panel above to buy a stock,
+            or <a href="{{ url_for('analyze.analyze_any_stock') }}?symbol=AAPL">analyze a symbol</a> first.</p>
     {% endif %}
 </section>
 
@@ -262,7 +269,7 @@
 
     {% set corr = risk.get('correlation') %}
     {% if corr %}
-        <h3 style="margin:18px 0 10px;">Correlation Matrix</h3>
+        <h3 class="section-h3">Correlation Matrix</h3>
         <div class="table-wrap">
             <table class="stock-table">
                 <thead><tr><th></th>{% for s in corr.symbols %}<th>{{ s }}</th>{% endfor %}</tr></thead>
@@ -281,7 +288,7 @@
     {% endif %}
 
     {% if risk.get('sizing') %}
-        <h3 style="margin:18px 0 10px;">Volatility-Target Position Sizing <span class="muted">(15% target annual vol, max 25% of cash)</span></h3>
+        <h3 class="section-h3">Volatility-Target Position Sizing <span class="muted">(15% target annual vol, max 25% of cash)</span></h3>
         <div class="table-wrap">
             <table class="stock-table">
                 <thead><tr><th>Symbol</th><th>Annual Vol</th><th>Suggested Shares</th><th>Position Value</th><th>% of Cash</th></tr></thead>
@@ -301,7 +308,7 @@
     {% endif %}
 
     {% if risk.get('rebalance') %}
-        <h3 style="margin:18px 0 10px;">Rebalance Suggestions <span class="muted">(towards equal weight)</span></h3>
+        <h3 class="section-h3">Rebalance Suggestions <span class="muted">(towards equal weight)</span></h3>
         <div class="table-wrap">
             <table class="stock-table">
                 <thead><tr><th>Symbol</th><th>Current</th><th>Target</th><th>Action</th></tr></thead>
@@ -373,12 +380,15 @@
         if (!symbol || !qty || qty <= 0) { showToast('Enter a symbol and quantity.', 'warning'); return; }
         const payload = {symbol: symbol, type: type, quantity: qty};
         if (price && price > 0) payload.price = price;
+        const buttons = Array.prototype.slice.call(document.querySelectorAll('.portfolio-trade-actions button'));
+        const wasDisabled = buttons.map(b => b.disabled);
+        buttons.forEach(b => b.disabled = true);
         window.StockPredictorAPI.post('/api/portfolio/trade', payload)
             .then(data => {
                 if (data.success) { showToast(data.message, 'success'); setTimeout(function(){ location.reload(); }, 900); }
-                else { showToast(data.message, 'warning'); }
+                else { showToast(data.message, 'warning'); buttons.forEach((b, i) => b.disabled = wasDisabled[i]); }
             })
-            .catch(err => showToast(err.message, 'error'));
+            .catch(err => { showToast(err.message, 'error'); buttons.forEach((b, i) => b.disabled = wasDisabled[i]); });
     }
 
     function quickTrade(symbol) {
@@ -390,16 +400,21 @@
     function cashMove(action) {
         const amount = parseFloat(document.getElementById('cashAmount').value);
         if (!amount || amount <= 0) { showToast('Enter an amount.', 'warning'); return; }
+        const buttons = Array.prototype.slice.call(document.querySelectorAll('.cash-move-actions button'));
+        const wasDisabled = buttons.map(b => b.disabled);
+        buttons.forEach(b => b.disabled = true);
         window.StockPredictorAPI.post('/api/portfolio/cash', {action: action, amount: amount})
             .then(data => {
                 if (data.success) { showToast(data.message, 'success'); setTimeout(function(){ location.reload(); }, 900); }
-                else { showToast(data.message, 'warning'); }
+                else { showToast(data.message, 'warning'); buttons.forEach((b, i) => b.disabled = wasDisabled[i]); }
             })
-            .catch(err => showToast(err.message, 'error'));
+            .catch(err => { showToast(err.message, 'error'); buttons.forEach((b, i) => b.disabled = wasDisabled[i]); });
     }
 
     function optimizePortfolio() {
         const box = document.getElementById('optimizeResult');
+        const btn = document.querySelector('button[onclick="optimizePortfolio()"]');
+        if (btn) btn.disabled = true;
         box.innerHTML = '<span class="muted">Analyzing recommendations…</span>';
         window.StockPredictorAPI.post('/api/portfolio/optimize', {risk_tolerance: 'medium'})
             .then(data => {
@@ -415,7 +430,8 @@
                     return '<li><strong>' + escapeHtml(name) + '</strong>' + (bits ? ' — ' + escapeHtml(bits) : '') + '</li>';
                 }).join('') + '</ul>';
             })
-            .catch(err => box.innerHTML = '<span class="muted">' + escapeHtml(err.message) + '</span>');
+            .catch(err => box.innerHTML = '<span class="muted">' + escapeHtml(err.message) + '</span>')
+            .then(function () { if (btn) btn.disabled = false; });
     }
 
     function escapeHtml(value) {

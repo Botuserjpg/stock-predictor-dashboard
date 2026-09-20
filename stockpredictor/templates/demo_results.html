@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Demo: {{ symbol }} — {{ app_name }}{% endblock %}
+{% block vendor_scripts %}
+    <script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+{% endblock %}
 {% block content %}
 {% set report = result.get('report') or {} %}
 {% set summary = (report.get('executive_summary') or {}) %}
@@ -15,7 +18,7 @@
 
 <div class="page-header">
     <h1>🔍 Demo Analysis: {{ symbol }}</h1>
-    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+    <div class="action-row">
         <span class="chip">⚡ precomputed demo</span>
         <span class="chip">Model: {{ summary.get('model_used', params.get('model_type', 'AUTO')) }}</span>
         <button class="btn btn-outline" onclick="window.print()">🖨️ Print</button>

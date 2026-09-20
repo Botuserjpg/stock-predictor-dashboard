@@ -37,12 +37,25 @@
             payload = await response.text();
         }
         if (!response.ok) {
-            const message = (payload && payload.message) || 'Request failed';
-            const error = new Error(message);
+            const error = new Error(errorMessage(response.status, payload));
             error.response = response;
             throw error;
         }
         return payload;
+    }
+
+    function errorMessage(status, payload) {
+        if (payload && typeof payload === 'object') {
+            if (typeof payload.message === 'string' && payload.message) return payload.message;
+            if (typeof payload.error === 'string' && payload.error) return payload.error;
+            if (typeof payload.detail === 'string' && payload.detail) return payload.detail;
+        }
+        if (status === 401 || status === 403) return 'Your session has expired. Please sign in again.';
+        if (status === 404) return 'The requested resource was not found.';
+        if (status === 429) return 'Too many requests — please wait a moment and try again.';
+        if (status === 500) return 'Server error — please try again in a moment.';
+        if (status >= 400) return 'Request failed (' + status + '). Please try again.';
+        return 'Request failed. Please try again.';
     }
 
     window.StockPredictorAPI = {
@@ -1389,6 +1402,9 @@
     }
 
 
+    var MAX_POLL_MS = 5 * 60 * 1000;
+    var MAX_ERROR_STRIKES = 5;
+
     function setupAnalysisPolling() {
         var card = document.querySelector('.analyzing-card');
         if (!card) return;
@@ -1401,8 +1417,24 @@
         if (!jobId || !endpoint) return;
 
         var elapsed = 0;
+        var strikes = 0;
+        var done = false;
+
+        function stop() {
+            if (!done) { done = true; clearInterval(timer); }
+        }
+        function failMessage(message) {
+            stop();
+            if (hint) hint.textContent = message;
+        }
+
         var timer = setInterval(function () {
+            if (done) { clearInterval(timer); return; }
             elapsed += 1500;
+            if (elapsed >= MAX_POLL_MS) {
+                failMessage('Analysis is taking longer than expected. The result is saved to your history — refresh the page to view it.');
+                return;
+            }
             window.StockPredictorAPI.get(endpoint).then(function (data) {
                 if (!hint) return;
                 hint.textContent = data.message || hint.textContent;
@@ -1413,18 +1445,37 @@
                     if (progress) progress.setAttribute('aria-valuenow', String(Math.round(pct)));
                 }
                 if (data.status === 'complete') {
-                    clearInterval(timer);
+                    stop();
                     if (fill) fill.style.width = '100%';
                     if (progress) progress.setAttribute('aria-valuenow', '100');
-                    setTimeout(function () { window.location.href = resultUrl; }, 600);
+                    if (resultUrl) {
+                        setTimeout(function () { window.location.href = resultUrl; }, 600);
+                    } else if (hint) {
+                        hint.textContent = 'Analysis complete.';
+                    }
                 } else if (data.status === 'error') {
-                    clearInterval(timer);
-                    hint.textContent = 'Analysis failed: ' + (data.message || 'unknown error');
+                    failMessage('Analysis failed: ' + (data.message || 'unknown error'));
                 } else if (data.status === 'missing') {
-                    clearInterval(timer);
-                    hint.textContent = 'Analysis is no longer available. Please try again.';
+                    failMessage('Analysis is no longer available. Please try again.');
                 }
-            }).catch(function () {
+            }).catch(function (err) {
+                var status = err && err.response ? err.response.status : 0;
+                if (status === 401 || status === 403) {
+                    /* session lost mid-poll — bounce to login instead of spinning forever */
+                    stop();
+                    window.location.href = '/login';
+                    return;
+                }
+                if (status === 429) {
+                    /* rate-limited: back off one tick without burning a strike */
+                    elapsed = Math.max(0, elapsed - 1500);
+                    return;
+                }
+                strikes += 1;
+                if (strikes >= MAX_ERROR_STRIKES) {
+                    failMessage('Connection problems while checking on the analysis. The result is saved to your history — refresh the page to view it.');
+                    return;
+                }
                 /* transient network error — keep polling */
             });
         }, 1500);

@@ -1019,6 +1019,18 @@ details pre { max-width: 420px; overflow-x: auto; font-size: 0.78em; color: var(
     .grid-2 { grid-template-columns: 1fr; }
     .auth-card { padding: 28px 22px; }
     .metric-value { font-size: 1.3em; }
+    .stock-table { min-width: 520px; }
+    .btn-sm { min-height: 40px; }
+}
+
+@media (max-width: 420px) {
+    .grid, .stats-grid, .two-col { grid-template-columns: 1fr; }
+    .action-row, .inline-form { flex-direction: column; align-items: stretch; }
+    .action-row .btn, .inline-form .btn, .inline-form input, .inline-form select { width: 100%; }
+    .inline-form input, .inline-form select { min-width: 0; }
+    .chart-wrap { min-height: 220px; }
+    .hero-actions .btn { width: 100%; text-align: center; }
+    .page-header { flex-wrap: wrap; }
 }
 
 /* ============ Theme toggle ============ */
@@ -1045,6 +1057,24 @@ details pre { max-width: 420px; overflow-x: auto; font-size: 0.78em; color: var(
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     align-items: start;
 }
+
+/* ============ Layout utilities ============ */
+.action-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.section-h3 { margin: 18px 0 10px; }
+.sr-only {
+    position: absolute; width: 1px; height: 1px; margin: -1px;
+    padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.report-pre { white-space: pre-wrap; word-break: break-word; }
+.preset {
+    background: none; border: none; padding: 0; margin: 0;
+    color: var(--accent); font: inherit; text-decoration: underline;
+    cursor: pointer; text-underline-offset: 2px;
+}
+.preset:hover { color: var(--accent-2); }
+.mini-fill.s-mini-up { background: var(--up); }
+.mini-fill.s-mini-gold { background: var(--gold); }
+.mini-fill.s-mini-down { background: var(--down); }
 
 /* ============ Price-alert banner ============ */
 .alert-banner {

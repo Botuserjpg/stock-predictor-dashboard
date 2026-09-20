@@ -22,6 +22,7 @@
 <section class="card">
     <h2>Add Symbol</h2>
     <div class="inline-form">
+        <label for="newSymbol" class="sr-only">Symbol to add to watchlist</label>
         <input type="text" id="newSymbol" placeholder="AAPL, MSFT, RELIANCE.NS"
                autocapitalize="characters" spellcheck="false">
         <button type="button" class="btn btn-success" id="addBtn" onclick="addStock()">＋ Add</button>
@@ -32,6 +33,7 @@
 <section class="card">
     <h2>Symbols</h2>
     {% if watchlist %}
+        <label for="watchlistFilter" class="sr-only">Filter symbols</label>
         <input type="search" id="watchlistFilter" class="watchlist-search"
                placeholder="Filter symbols…" autocomplete="off">
         <div class="table-wrap">
@@ -147,6 +149,8 @@
             showToast('Please enter a symbol first.', 'warning');
             return;
         }
+        const btn = document.getElementById('addBtn');
+        if (btn) btn.disabled = true;
         window.StockPredictorAPI.post('/api/watchlist/add', {symbol: symbol})
             .then(data => {
                 if (data.success) {
@@ -154,9 +158,10 @@
                     location.reload();
                 } else {
                     showToast(data.message, 'warning');
+                    if (btn) btn.disabled = false;
                 }
             })
-            .catch(err => showToast(err.message, 'error'));
+            .catch(err => { showToast(err.message, 'error'); if (btn) btn.disabled = false; });
     }
 
     function removeStock(symbol) {

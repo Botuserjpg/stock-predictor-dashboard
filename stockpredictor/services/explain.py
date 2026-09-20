@@ -45,8 +45,26 @@ def explain_forecast(
     """Return ranked feature attributions for the most recent forecast window.
 
     Falls back through: SHAP TreeExplainer -> RandomForest importance -> linear
-    correlation, so a result is always produced for display.
+    correlation, so a result is always produced for display. Results for a named
+    symbol are cached for 10 minutes so repeat clicks do not refit the forest.
     """
+    if symbol:
+        from production_core import cached
+
+        def _produce():
+            return _explain_impl(rows, n_top=n_top, persist=persist, symbol=symbol)
+
+        return cached(f"explain:{symbol}", ttl=600, producer=_produce)()
+    return _explain_impl(rows, n_top=n_top, persist=persist, symbol=symbol)
+
+
+def _explain_impl(
+    rows,
+    n_top: int = 8,
+    persist: bool = True,
+    symbol: str = "",
+) -> Dict[str, Any]:
+    """Shared explain implementation used by :func:`explain_forecast`."""
     frame = _feature_frame(rows)
     if frame.shape[0] < 30 or frame.shape[1] < 3:
         return {"success": False, "message": "Not enough feature history to explain"}

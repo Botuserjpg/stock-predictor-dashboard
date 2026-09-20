@@ -102,7 +102,7 @@
 <section class="card" id="relativeStrengthCard" data-watchlist="{{ watchlist | tojson }}">
     <div class="card-header">
         <h2><span class="card-emoji">⚖️</span> Relative Strength vs SPY</h2>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div class="action-row">
             <span class="pill pill-blue">Composite 0–100</span>
             <button class="btn btn-outline btn-sm" id="loadRsBtn" onclick="StockPredictorAPI.loadRelativeStrength()">↻ Load</button>
         </div>
@@ -117,7 +117,7 @@
 <section class="card" id="driftCard" data-watchlist="{{ watchlist | tojson }}">
     <div class="card-header">
         <h2><span class="card-emoji">🧬</span> Model Drift Monitor</h2>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div class="action-row">
             <span class="pill pill-blue">PSI vs baseline</span>
             <button class="btn btn-outline btn-sm" id="loadDriftBtn" onclick="StockPredictorAPI.loadDrift()">↻ Check</button>
         </div>

@@ -8,17 +8,22 @@ logger = logging.getLogger("stockpredictor.services.analytics")
 
 
 def market_overview() -> Dict[str, Any]:
-    try:
-        import model_utils as mu
+    from production_core import cached
 
-        return {
-            "indices": mu.get_market_indices(),
-            "sectors": _normalize_sectors(mu.get_sector_performance()),
-            "sentiment": mu.get_real_market_sentiment() if hasattr(mu, "get_real_market_sentiment") else {},
-        }
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("Market overview failed: %s", exc)
-        return {"indices": {}, "sectors": {}, "sentiment": {}}
+    def _produce() -> Dict[str, Any]:
+        try:
+            import model_utils as mu
+
+            return {
+                "indices": mu.get_market_indices(),
+                "sectors": _normalize_sectors(mu.get_sector_performance()),
+                "sentiment": mu.get_real_market_sentiment() if hasattr(mu, "get_real_market_sentiment") else {},
+            }
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Market overview failed: %s", exc)
+            return {"indices": {}, "sectors": {}, "sentiment": {}}
+
+    return cached("analytics:market-overview", ttl=1800, producer=_produce)()
 
 
 def _normalize_sectors(sectors: Dict[str, Any]) -> Dict[str, float]:
@@ -56,6 +61,7 @@ def technical_overview(symbols: List[str]) -> Dict[str, Any]:
         try:
             return symbol, get_technical_analysis(symbol, period="6mo")
         except Exception:
+            logger.debug("Technical overview: analysis failed for %s", symbol)
             return symbol, {}
 
     results = {}

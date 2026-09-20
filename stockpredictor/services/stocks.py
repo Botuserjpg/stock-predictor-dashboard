@@ -440,10 +440,16 @@ def _local_search(q: str, limit: int) -> List[Dict[str, Any]]:
 
 
 def get_company_fundamentals(symbol: str) -> Dict[str, Any]:
+    from production_core import cached
     from fundamentals import get_company_fundamentals as _fundamentals
 
-    try:
-        return _fundamentals(symbol)
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("Fundamentals lookup failed for %s: %s", symbol, exc)
-        return {}
+    clean = (symbol or "").upper().strip()
+
+    def _produce():
+        try:
+            return _fundamentals(clean)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Fundamentals lookup failed for %s: %s", clean, exc)
+            return {}
+
+    return cached(f"fundamentals:{clean}", ttl=3600, producer=_produce)()

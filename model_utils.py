@@ -932,6 +932,11 @@ def get_stock_data(symbol: str, period: str = '1y', interval: str = '1d',
             pass
         
         print(f"ðŸ”¥ UNABLE to get REAL data for {normalized_symbol}, using enhanced simulation")
+        logger.warning(
+            "Real market data unavailable for %s — serving SIMULATED history (%s). "
+            "Signals computed on simulated data are unreliable.",
+            normalized_symbol, period,
+        )
         return _create_enhanced_realistic_data(normalized_symbol, period)
 
 def _normalize_symbol(symbol: str) -> str:
@@ -3248,6 +3253,7 @@ def get_current_real_price(symbol: str) -> float:
         print(f"[X] Direct API failed: {e}")
     
     # LAST RESORT: Realistic estimation based on actual market data
+    logger.warning("Live price lookup failed for %s after all attempts — using estimated price", symbol_clean)
     print("ðŸŽ¯ Using intelligent estimation...")
     estimated_price = _get_intelligent_estimation(symbol_clean)
     print(f"ðŸ“Š ESTIMATED: {symbol_clean} â‰ˆ ₹{estimated_price:.2f}")

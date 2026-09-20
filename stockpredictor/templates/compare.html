@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Compare Stocks — {{ app_name }}{% endblock %}
+{% if compare %}
+{% block vendor_scripts %}
+    <script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+{% endblock %}
+{% endif %}
 {% block content %}
 <div class="page-header">
     <h1>⚖️ Compare Stocks</h1>
@@ -12,6 +17,7 @@
     <form method="POST" action="{{ url_for('compare.page') }}" id="compareForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="inline-form">
+            <label for="compareSymbols" class="sr-only">Symbols to compare</label>
             <input type="text" id="compareSymbols" name="symbols"
                    placeholder="AAPL, MSFT, NVDA" autocapitalize="characters"
                    spellcheck="false" value="{{ compare.symbols | join(', ') if compare else '' }}">
@@ -19,9 +25,10 @@
         </div>
         <p class="field-hint">
             Press Compare to pull live quotes, technical indicators and sentiment for each symbol.
-            Example sets: <a href="#" class="preset" data-set="AAPL,MSFT,NVDA">AAPL, MSFT, NVDA</a> ·
-            <a href="#" class="preset" data-set="TSLA,NIO,RIVN">TSLA, NIO, RIVN</a> ·
-            <a href="#" class="preset" data-set="RELIANCE.NS,TCS.NS,INFY.NS">RELIANCE.NS, TCS.NS, INFY.NS</a>
+            Example sets:
+            <button type="button" class="preset" data-set="AAPL,MSFT,NVDA">AAPL, MSFT, NVDA</button> ·
+            <button type="button" class="preset" data-set="TSLA,NIO,RIVN">TSLA, NIO, RIVN</button> ·
+            <button type="button" class="preset" data-set="RELIANCE.NS,TCS.NS,INFY.NS">RELIANCE.NS, TCS.NS, INFY.NS</button>
         </p>
     </form>
     {% if error %}
@@ -160,21 +167,23 @@
 
 {% block scripts %}
 <script>
-    document.querySelectorAll('.preset').forEach(function (link) {
-        link.addEventListener('click', function (event) {
-            event.preventDefault();
-            document.getElementById('compareSymbols').value = link.getAttribute('data-set');
+    document.querySelectorAll('.preset').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.getElementById('compareSymbols').value = btn.getAttribute('data-set');
             document.getElementById('compareForm').submit();
         });
     });
 
     function addCompared(symbol) {
+        const btn = document.querySelector('button[onclick="addCompared(\'' + symbol + '\')"]');
+        if (btn) btn.disabled = true;
         window.StockPredictorAPI.post('/api/watchlist/add', {symbol: symbol})
             .then(function (data) {
                 if (data.success) showToast(data.message, 'success');
                 else showToast(data.message, 'warning');
             })
-            .catch(function (err) { showToast(err.message, 'error'); });
+            .catch(function (err) { showToast(err.message, 'error'); })
+            .then(function () { if (btn) btn.disabled = false; });
     }
 </script>
 {% endblock %}

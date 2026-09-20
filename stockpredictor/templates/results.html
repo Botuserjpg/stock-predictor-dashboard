@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Results: {{ symbol }} — {{ app_name }}{% endblock %}
+{% block vendor_scripts %}
+    <script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+{% endblock %}
 {% block content %}
 {% set summary = (report.get('executive_summary') or {}) %}
 {% set currency = summary.get('currency_symbol', '$') %}
@@ -9,7 +12,7 @@
 
 <div class="page-header">
     <h1>🔍 AI Analysis: {{ symbol }}</h1>
-    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <div class="action-row">
         {% set params = params or {} %}
         <button class="btn btn-outline" id="watchlistBtn"
                 data-symbol="{{ symbol }}"
@@ -85,7 +88,7 @@
     </div>
     <div class="metric-card">
         <div class="metric-label">Confidence</div>
-        <div class="metric-value trend-up">{{ "%.0f" | format((summary.get('confidence_score', 0) or 0) * 100) }}%</div>
+        <div class="metric-value">{{ "%.0f" | format((summary.get('confidence_score', 0) or 0) * 100) }}%</div>
     </div>
 </div>
 
@@ -247,7 +250,7 @@
         <h2><span class="card-emoji">🕰️</span> Backtesting</h2>
         <span class="pill pill-blue">MA crossover · walk-forward</span>
     </div>
-    <div class="form-row" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px;">
+    <div class="action-row" style="margin-bottom:14px;">
         <label>Strategy
             <select id="btStrategy" class="input">
                 <option value="MA_CROSS" selected>MA Crossover</option>
@@ -267,7 +270,7 @@
         <h2><span class="card-emoji">🎲</span> Monte Carlo Simulation</h2>
         <span class="pill pill-blue">10,000 price paths</span>
     </div>
-    <div class="form-row" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px;">
+    <div class="action-row" style="margin-bottom:14px;">
         <label>Horizon (days) <input type="number" id="mcHorizon" class="input" value="30" min="1" max="250" style="width:90px;"></label>
         <label>Target {{ currency }} <input type="number" id="mcTarget" class="input" placeholder="optional" step="0.01" style="width:110px;"></label>
         <label>Stop {{ currency }} <input type="number" id="mcStop" class="input" placeholder="optional" step="0.01" style="width:110px;"></label>

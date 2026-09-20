@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 from datetime import datetime
 
 from flask import Blueprint, Response, current_app, jsonify, request
@@ -14,6 +15,8 @@ from ..services import stocks
 from ..services.portfolio import get_portfolio
 
 bp = Blueprint("api", __name__)
+
+logger = logging.getLogger("stockpredictor.views.api")
 
 
 def _int_arg(name: str, default: int, lo: int, hi: int) -> int:
@@ -60,6 +63,7 @@ def api_search():
         limit = _int_arg("limit", 8, 1, 15)
         results = stocks.search_symbols(query, limit=limit)
     except Exception:
+        logger.warning("API: symbol search failed for %r", query)
         results = []
     return jsonify({"success": True, "results": results})
 
@@ -72,6 +76,7 @@ def api_market_ticker():
     try:
         indices = stocks.get_market_indices()
     except Exception:
+        logger.warning("API: market ticker indices unavailable")
         indices = {}
     limited = dict(list(indices.items())[:8])
     return jsonify({"success": True, "indices": limited})

@@ -47,6 +47,12 @@ class Settings:
             hours=self._env_int("SESSION_HOURS", 12)
         )
 
+        # Static assets are served with a modest browser cache so deploys with
+        # unhashed filenames still propagate within a few minutes.
+        self.SEND_FILE_MAX_AGE_DEFAULT = self._env_int(
+            "STATIC_MAX_AGE", 300
+        )
+
         # Content-Security-Policy: report-only by default (pages still carry a
         # few legacy inline scripts); flip CSP_ENFORCE=true once externalized.
         self.CSP_POLICY = self._env_str(

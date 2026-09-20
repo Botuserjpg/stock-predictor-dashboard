@@ -1,6 +1,7 @@
 """Dashboard blueprint: post-login landing page with market overview."""
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
@@ -14,6 +15,8 @@ from ..services.demo_cache import list_demo_tickers
 
 bp = Blueprint("dashboard", __name__)
 
+logger = logging.getLogger("stockpredictor.views.dashboard")
+
 _MAX_WORKERS = 6
 
 
@@ -23,13 +26,13 @@ def _fetch_live(symbol: str) -> Dict[str, Any]:
     try:
         quote = stocks.get_quote(symbol)
     except Exception:
-        pass
+        logger.debug("Dashboard: quote fetch failed for %s", symbol)
     closes: List[float] = []
     try:
         history = stocks.get_price_history(symbol, period="1mo", limit=22)
         closes = [round(float(row["Close"]), 2) for row in history if row.get("Close")]
     except Exception:
-        pass
+        logger.debug("Dashboard: sparkline history failed for %s", symbol)
     return {"symbol": symbol, "quote": quote, "closes": closes}
 
 
@@ -104,6 +107,7 @@ def _render_dashboard(email: str, demo_mode: bool = False):
     try:
         indices = stocks.get_market_indices()
     except Exception:
+        logger.warning("Dashboard: market indices unavailable for %s", email)
         indices = {}
 
     watchlist = ["AAPL", "MSFT", "NVDA", "SPY"] if demo_mode else user_store.watchlists().get(email, [])

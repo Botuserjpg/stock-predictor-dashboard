@@ -23,14 +23,14 @@ def _model_client():
         try:
             from openai import OpenAI
 
-            return {"provider": "openai", "client": OpenAI(api_key=openai_key)}
+            return {"provider": "openai", "client": OpenAI(api_key=openai_key, timeout=25)}
         except Exception as exc:  # pragma: no cover - env dependent
             logger.warning("OpenAI client unavailable: %s", exc)
     if anthropic_key:
         try:
             from anthropic import Anthropic
 
-            return {"provider": "anthropic", "client": Anthropic(api_key=anthropic_key)}
+            return {"provider": "anthropic", "client": Anthropic(api_key=anthropic_key, timeout=25)}
         except Exception as exc:  # pragma: no cover - env dependent
             logger.warning("Anthropic client unavailable: %s", exc)
     return None
