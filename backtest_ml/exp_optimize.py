@@ -85,7 +85,15 @@ F1 = [
     "Drawdown_60d", "Trend_Strength_20d",
     "Close_SMA20", "Close_SMA50", "Dist_Res_20d", "Dist_Sup_20d",
 ]
-FEATURE_SETS = {"F0": F0, "F1": F1}
+# F2 = F1 + intraday/candle features that are causal at end-of-day close t
+# (they use only Open/High/Low/Close as of day t and inputs known <= t, so they
+# carry no future information about day t+1).
+CANDLE_FEATURES = [
+    "Candle_Body_1d", "Close_Position_1d", "Upper_Shadow_1d",
+    "Lower_Shadow_1d", "Day_Range_Pct", "Gap_Open_1d", "RSI_2",
+]
+F2 = F1 + CANDLE_FEATURES
+FEATURE_SETS = {"F0": F0, "F1": F1, "F2": F2}
 
 SENTIMENT_DEFAULTS = {"News_Sentiment": 0.0, "Social_Buzz": 0, "Sentiment_Strength": 0.1}
 
@@ -121,17 +129,49 @@ def load_raw(symbol):
     return df
 
 
+def add_candle_features(data):
+    """Intraday/candle features, all causal as of end-of-day close t.
+
+    Every feature uses only Open/High/Low/Close of day t (or earlier): no
+    shift(-1), no non-causal fills. Safe for the next-day (t+1) target.
+    """
+    data = data.copy()
+    openc = pd.to_numeric(data["Open"], errors="coerce")
+    high = pd.to_numeric(data["High"], errors="coerce")
+    low = pd.to_numeric(data["Low"], errors="coerce")
+    close = pd.to_numeric(data["Close"], errors="coerce")
+    rng = (high - low).replace(0, np.nan)
+    data["Day_Range_Pct"] = (high - low) / openc.replace(0, np.nan)
+    data["Candle_Body_1d"] = (close - openc) / openc.replace(0, np.nan)
+    data["Close_Position_1d"] = (close - low) / rng
+    data["Upper_Shadow_1d"] = (high - data[["Open", "Close"]].max(axis=1)) / rng
+    data["Lower_Shadow_1d"] = (data[["Open", "Close"]].min(axis=1) - low) / rng
+    data["Gap_Open_1d"] = openc / close.shift(1).replace(0, np.nan) - 1.0
+    delta = close.diff()
+    gain = delta.clip(lower=0).rolling(window=2).mean()
+    loss = (-delta.clip(upper=0)).rolling(window=2).mean()
+    rsi2 = 100.0 - (100.0 / (1.0 + gain / loss.replace(0, np.nan)))
+    rsi2 = rsi2.where(np.isfinite(rsi2), 100.0)  # zero losses over the window -> RSI 100
+    rsi2 = rsi2.where(~((gain == 0) & (loss == 0)), 50.0)  # fully flat -> RSI 50
+    data["RSI_2"] = rsi2
+    return data
+
+
 def build_frame(symbol):
     """Build a causal feature frame (no future info). Returns (frame, report).
 
     Frames are cached to disk (keyed by symbol) because adding indicators is the
     most expensive step and every experiment must use identical inputs anyway.
+    Candle features (F2) are always materialised on load so experiments that use
+    them see identical data regardless of when the base cache was written.
     """
     os.makedirs(DATA_CACHE, exist_ok=True)
     cache_path = os.path.join(DATA_CACHE, f"{symbol.replace('.', '_')}_frame.parquet")
     if os.path.exists(cache_path):
         data = pd.read_parquet(cache_path)
-        return data, validate_market_data_skipped(data)
+        if "Candle_Body_1d" not in data.columns:
+            data = add_candle_features(data)
+        return data, {"is_valid": True, "warnings": ["frame loaded from cache; validation rerun skipped"]}
 
     raw = load_raw(symbol)
     report = validate_market_data(raw, symbol)
@@ -153,6 +193,8 @@ def build_frame(symbol):
     data["BB_Width"] = (data["BB_Upper"] - data["BB_Lower"]) / close.replace(0, np.nan)
     vol_ma = vol.rolling(20).mean()
     data["Volume_Ma_Ratio"] = vol / vol_ma.replace(0, np.nan) - 1.0
+
+    data = add_candle_features(data)
 
     data = data.replace([np.inf, -np.inf], np.nan)
     data = data.apply(pd.to_numeric, errors="coerce").ffill()
@@ -188,11 +230,13 @@ def make_sequences(feat_scaled, y, lookback):
 
 
 def build_target_series(frame, features, target, n_train):
-    """Return (feature_inputs, target) aligned to frame rows.
+    """Return (feature_inputs, target, close, base_price, ret, scaler) aligned to frame rows.
 
     T0 price :  scaled Close at row i is the target; window rows [i-L, i).
     T1/T2    :  (log/pct) return over close[i-1] -> close[i] is the target.
                 target scaled by a per-instrument RobustScaler fit on TRAIN rows.
+                ``ret`` is the raw (unscaled) log/pct return series and is
+                returned so direction labels can be derived without leakage.
     """
     close = frame["Close"].to_numpy(dtype=float)
 
@@ -203,13 +247,18 @@ def build_target_series(frame, features, target, n_train):
         feat_scaled = scaler.transform(feat)
         y = feat_scaled[:, 0].copy()  # Close is feature 0
         base_price = np.roll(close, 1)
-        return feat_scaled, y, close, base_price, scaler
+        ret = np.zeros_like(close)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ret[1:] = close[1:] / np.where(close[:-1] > 0, close[:-1], np.nan) - 1.0
+        ret[:1] = np.nan
+        return feat_scaled, y, close, base_price, ret, scaler
 
     logc = np.zeros_like(close)
     with np.errstate(divide="ignore", invalid="ignore"):
         np.log(close, out=logc, where=close > 0)
-    ret = np.zeros_like(close)
-    ret[1:] = logc[1:] - logc[:-1] if target == "logreturn" else close[1:] / np.where(close[:-1] > 0, close[:-1], np.nan) - 1.0
+    rate = np.zeros_like(close)
+    rate[1:] = logc[1:] - logc[:-1] if target == "logreturn" else close[1:] / np.where(close[:-1] > 0, close[:-1], np.nan) - 1.0
+    ret = rate.copy()
     ret[:1] = np.nan
 
     feat = frame[features].to_numpy(dtype=float)
@@ -222,7 +271,7 @@ def build_target_series(frame, features, target, n_train):
     y_scaled = y_scaler.transform(ret.reshape(-1, 1))[:, 0]
 
     base_price = np.roll(close, 1)
-    return feat_scaled, y_scaled, close, base_price, (feat_scaler, y_scaler)
+    return feat_scaled, y_scaled, close, base_price, ret, (feat_scaler, y_scaler)
 
 
 def build_model(cfg, input_shape, n_features):
@@ -298,12 +347,45 @@ def build_model(cfg, input_shape, n_features):
         x = stack(main_input)
 
     out = Dense(1, activation="linear", name="main_output")(x)
-    model = keras.Model(inputs=main_input, outputs=out)
+    dirpen_phi = float(cfg.get("dirpen", 0.0))
+    dirhead_w = float(cfg.get("dirhead", 0.0))
+
+    if dirhead_w > 0:
+        dir_out = Dense(1, activation="sigmoid", name="dir_output")(x)
+        model = keras.Model(inputs=main_input, outputs=[out, dir_out])
+    else:
+        model = keras.Model(inputs=main_input, outputs=out)
     optimizer = Adam(learning_rate=float(cfg.get("lr", 0.0005)),
                      clipnorm=float(cfg.get("clipnorm", 1.0)))
-    model.compile(optimizer=optimizer,
-                  loss="huber_loss" if loss == "huber" else "mse",
-                  metrics=["mae", "mse"])
+
+    reg_loss = "huber_loss" if loss == "huber" else "mse"
+    if dirpen_phi > 0:
+        import tensorflow as tf
+
+        def dir_huber(y_true, y_pred, phi=dirpen_phi):
+            err = y_true - y_pred
+            abs_e = tf.abs(err)
+            quad = 0.5 * tf.square(err)
+            lin = tf.abs(err) - 0.5
+            huber = tf.where(abs_e <= 1.0, quad, lin)
+            wrong = tf.cast(tf.math.sign(y_true) != tf.math.sign(y_pred), tf.float32)
+            tiny = tf.cast(tf.abs(y_true) < 1e-6, tf.float32)
+            weight = 1.0 + phi * wrong * (1.0 - tiny)
+            return tf.reduce_mean(huber * weight)
+
+        reg_loss = dir_huber
+
+    if dirhead_w > 0:
+        model.compile(
+            optimizer=optimizer,
+            loss={"main_output": reg_loss, "dir_output": "binary_crossentropy"},
+            loss_weights={"main_output": 1.0, "dir_output": dirhead_w},
+            metrics={"main_output": ["mae", "mse"], "dir_output": ["accuracy"]},
+        )
+    else:
+        model.compile(optimizer=optimizer,
+                      loss=reg_loss,
+                      metrics=["mae", "mse"])
     return model
 
 
@@ -380,6 +462,8 @@ def run_config(cfg, evaluate_test=False, name=None):
     batch_size = int(cfg.get("batch_size", 32))
     es_patience = int(cfg.get("es_patience", 20))
     pooled = bool(cfg.get("pooled", False))
+    seed = int(cfg.get("seed", SEED))
+    dirhead_w = float(cfg.get("dirhead", 0.0))
 
     print("=" * 78)
     print(f"OPT RUN | {name} | run_id={run_id}")
@@ -388,11 +472,11 @@ def run_config(cfg, evaluate_test=False, name=None):
     print(f"target={target} lookback={lookback} pooled={pooled} "
           f"epochs={epochs} batch={batch_size} evaluate_test={evaluate_test}")
     print(f"python={platform.python_version()} tf={tf.__version__}")
-    print(f"seed={SEED} TF threads intra={os.environ.get('TF_INTRA_OP_THREADS','6')}")
+    print(f"seed={seed} TF threads intra={os.environ.get('TF_INTRA_OP_THREADS','6')}")
 
-    random.seed(SEED)
-    np.random.seed(SEED)
-    tf.random.set_seed(SEED)
+    random.seed(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
 
     frames = {}
     per_symbol_val, per_symbol_test = [], []
@@ -408,34 +492,41 @@ def run_config(cfg, evaluate_test=False, name=None):
         print(f"[{symbol}] rows={n_rows} range={frame.index[0].date()}..{frame.index[-1].date()} "
               f"quality_valid={report.get('is_valid')}", flush=True)
 
-        feat_scaled, y_scaled, close, base_price, scaler = build_target_series(
+        feat_scaled, y_scaled, close, base_price, ret, scaler = build_target_series(
             frame, features, target, n_train)
         valid = np.isfinite(feat_scaled).all(axis=1) & np.isfinite(y_scaled)
         orig_rows = np.arange(n_rows)[valid]
-        feat_scaled, y_scaled, close, base_price = (
-            feat_scaled[valid], y_scaled[valid], close[valid], base_price[valid])
+        feat_scaled, y_scaled, close, base_price, ret = (
+            feat_scaled[valid], y_scaled[valid], close[valid], base_price[valid], ret[valid])
 
         X, y = make_sequences(feat_scaled, y_scaled, lookback)
+        y_dir = (ret[lookback:] > 0).astype(np.float32)
         seq_end_orig = orig_rows[lookback:]
         close_seq = close[lookback:]
         base_seq = base_price[lookback:]
+        dir_seq = y_dir
 
         def seg(lo, hi):
             sel = (seq_end_orig >= lo) & (seq_end_orig < hi)
-            return X[sel], y[sel], seq_end_orig[sel], close_seq[sel], base_seq[sel]
+            return (X[sel], y[sel], dir_seq[sel], seq_end_orig[sel],
+                    close_seq[sel], base_seq[sel])
 
-        Xtr, ytr, idxr, _, _ = seg(lookback, n_train)
-        Xv, yv, idxv, closev, basev = seg(n_train, n_train + n_val)
-        Xte, yte, idxx, closex, basex = seg(n_train + n_val, n_rows)
-        print(f"[{symbol}] seqs train={len(Xtr)} val={len(Xv)} test={len(Xte)}", flush=True)
+        Xtr, ytr, dtr, idxr, _, _ = seg(lookback, n_train)
+        Xv, yv, dv, idxv, closev, basev = seg(n_train, n_train + n_val)
+        Xte, yte, dte, idxx, closex, basex = seg(n_train + n_val, n_rows)
+        print(f"[{symbol}] seqs train={len(Xtr)} val={len(Xv)} test={len(Xte)} "
+              f"train_up_share={float(dtr.mean()):.3f}", flush=True)
         assert len(Xte) > 0 and len(Xv) > 0 and len(Xtr) > 0
 
         frames[symbol] = {
-            "Xtr": Xtr, "ytr": ytr, "Xv": Xv, "yv": yv, "Xte": Xte, "yte": yte,
+            "Xtr": Xtr, "ytr": ytr, "dtr": dtr,
+            "Xv": Xv, "yv": yv, "dv": dv,
+            "Xte": Xte, "yte": yte, "dte": dte,
             "idxx": idxx, "closex": closex, "basex": basex,
             "idxv": idxv, "closev": closev, "basev": basev,
             "scaler": scaler, "lookback": lookback, "n_train": n_train, "n_rows": n_rows,
             "dates": frame.index.to_numpy(), "features": features,
+            "seed": seed, "dirhead_w": dirhead_w,
         }
 
     # ---- training ----
@@ -462,13 +553,37 @@ def run_config(cfg, evaluate_test=False, name=None):
 
         t0 = datetime.now(timezone.utc)
         if pooled:
-            hist = model.fit(Xtr, ytr, validation_data=(Xv, yv), epochs=epochs,
-                             batch_size=batch_size, callbacks=[es, rlrp], shuffle=True, verbose=1)
+            if dirhead_w > 0:
+                Xtr_p = np.concatenate([frames[s]["Xtr"] for s in SYMBOLS])
+                ytr_p = np.concatenate([frames[s]["ytr"] for s in SYMBOLS])
+                dtr_p = np.concatenate([frames[s]["dtr"] for s in SYMBOLS])
+                Xv_p = np.concatenate([frames[s]["Xv"] for s in SYMBOLS])
+                yv_p = np.concatenate([frames[s]["yv"] for s in SYMBOLS])
+                dv_p = np.concatenate([frames[s]["dv"] for s in SYMBOLS])
+                hist = model.fit(Xtr_p, [ytr_p, dtr_p],
+                                 validation_data=(Xv_p, [yv_p, dv_p]),
+                                 epochs=epochs, batch_size=batch_size,
+                                 callbacks=[es, rlrp], shuffle=True, verbose=1)
+            else:
+                Xtr_p = np.concatenate([frames[s]["Xtr"] for s in SYMBOLS])
+                ytr_p = np.concatenate([frames[s]["ytr"] for s in SYMBOLS])
+                Xv_p = np.concatenate([frames[s]["Xv"] for s in SYMBOLS])
+                yv_p = np.concatenate([frames[s]["yv"] for s in SYMBOLS])
+                hist = model.fit(Xtr_p, ytr_p, validation_data=(Xv_p, yv_p),
+                                 epochs=epochs, batch_size=batch_size,
+                                 callbacks=[es, rlrp], shuffle=True, verbose=1)
         else:
-            hist = model.fit(frames[symbol]["Xtr"], frames[symbol]["ytr"],
-                             validation_data=(frames[symbol]["Xv"], frames[symbol]["yv"]),
-                             epochs=epochs, batch_size=batch_size,
-                             callbacks=[es, rlrp], shuffle=True, verbose=1)
+            d = frames[symbol]
+            if dirhead_w > 0:
+                hist = model.fit(d["Xtr"], [d["ytr"], d["dtr"]],
+                                 validation_data=(d["Xv"], [d["yv"], d["dv"]]),
+                                 epochs=epochs, batch_size=batch_size,
+                                 callbacks=[es, rlrp], shuffle=True, verbose=1)
+            else:
+                hist = model.fit(d["Xtr"], d["ytr"],
+                                 validation_data=(d["Xv"], d["yv"]),
+                                 epochs=epochs, batch_size=batch_size,
+                                 callbacks=[es, rlrp], shuffle=True, verbose=1)
         train_s = (datetime.now(timezone.utc) - t0).total_seconds()
         run_epochs = len(hist.history["loss"])
         total_epochs_run += run_epochs
@@ -477,8 +592,9 @@ def run_config(cfg, evaluate_test=False, name=None):
 
         # Validation predictions (model selection)
         src = frames[symbol]
-        preds_v = model.predict(src["Xv"], verbose=0).flatten()
-        pred_price_v = inverse_to_price(preds_v, cfg, src["basev"], src["scaler"])
+        preds_v = model.predict(src["Xv"], verbose=0)
+        preds_v = preds_v[0] if isinstance(preds_v, list) else preds_v
+        pred_price_v = inverse_to_price(preds_v.flatten(), cfg, src["basev"], src["scaler"])
         vm = compute_metrics(src["closev"], pred_price_v, src["basev"])
         per_symbol_val.append({"instrument": symbol, **vm})
         print(f"[{symbol}] VAL METRICS RMSE={vm['RMSE']:.4g} MAPE%={vm['MAPE_percent']:.4g} "
@@ -495,8 +611,9 @@ def run_config(cfg, evaluate_test=False, name=None):
             })
 
         if evaluate_test:
-            preds_t = model.predict(src["Xte"], verbose=0).flatten()
-            pred_price_t = inverse_to_price(preds_t, cfg, src["basex"], src["scaler"])
+            preds_t = model.predict(src["Xte"], verbose=0)
+            preds_t = preds_t[0] if isinstance(preds_t, list) else preds_t
+            pred_price_t = inverse_to_price(preds_t.flatten(), cfg, src["basex"], src["scaler"])
             tm = compute_metrics(src["closex"], pred_price_t, src["basex"])
             per_symbol_test.append({"instrument": symbol, **tm})
             print(f"[{symbol}] TEST METRICS RMSE={tm['RMSE']:.4g} MAPE%={tm['MAPE_percent']:.4g} "

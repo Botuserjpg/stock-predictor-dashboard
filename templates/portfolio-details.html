@@ -294,28 +294,28 @@
                 <div class="metric-card">
                     <div>Total Return</div>
                     <div style="font-size: 2em; font-weight: bold;" id="totalReturn">
-                        {{ "%+.2f"|format(portfolio.total_return | default(0)) }}%
+                        {% if portfolio.total_return is not none %}{{ "%+.2f"|format(portfolio.total_return) }}%{% else %}Not evaluated{% endif %}
                     </div>
                     <div>Since Inception</div>
                 </div>
                 <div class="metric-card">
                     <div>Annualized Return</div>
                     <div style="font-size: 2em; font-weight: bold;" id="annualReturn">
-                        {{ "%+.2f"|format(portfolio.annual_return | default(0)) }}%
+                        {% if portfolio.annual_return is not none %}{{ "%+.2f"|format(portfolio.annual_return) }}%{% else %}Not evaluated{% endif %}
                     </div>
                     <div>CAGR</div>
                 </div>
                 <div class="metric-card">
                     <div>Sharpe Ratio</div>
                     <div style="font-size: 2em; font-weight: bold;" id="sharpeRatio">
-                        {{ portfolio.sharpe_ratio | default(1.2) | round(2) }}
+                        {% if portfolio.sharpe_ratio is not none %}{{ portfolio.sharpe_ratio | round(2) }}{% else %}Not evaluated{% endif %}
                     </div>
                     <div>Risk-Adjusted</div>
                 </div>
                 <div class="metric-card">
                     <div>Max Drawdown</div>
                     <div style="font-size: 2em; font-weight: bold;" class="negative" id="maxDrawdown">
-                        {{ "%.2f"|format(portfolio.max_drawdown | default(0)) }}%
+                        {% if portfolio.max_drawdown is not none %}{{ "%.2f"|format(portfolio.max_drawdown) }}%{% else %}Not evaluated{% endif %}
                     </div>
                     <div>Worst Period</div>
                 </div>
@@ -346,15 +346,15 @@
                         <div class="risk-breakdown">
                             <div class="risk-item" style="background: #d4edda;">
                                 <div>Market Risk</div>
-                                <div style="font-size: 1.5em; font-weight: bold;">{{ portfolio.market_risk | default(65) }}%</div>
+                                <div style="font-size: 1.5em; font-weight: bold;">{% if portfolio.market_risk is not none %}{{ portfolio.market_risk }}%{% else %}Not evaluated{% endif %}</div>
                             </div>
                             <div class="risk-item" style="background: #fff3cd;">
                                 <div>Specific Risk</div>
-                                <div style="font-size: 1.5em; font-weight: bold;">{{ portfolio.specific_risk | default(25) }}%</div>
+                                <div style="font-size: 1.5em; font-weight: bold;">{% if portfolio.specific_risk is not none %}{{ portfolio.specific_risk }}%{% else %}Not evaluated{% endif %}</div>
                             </div>
                             <div class="risk-item" style="background: #f8d7da;">
                                 <div>Liquidity Risk</div>
-                                <div style="font-size: 1.5em; font-weight: bold;">{{ portfolio.liquidity_risk | default(10) }}%</div>
+                                <div style="font-size: 1.5em; font-weight: bold;">{% if portfolio.liquidity_risk is not none %}{{ portfolio.liquidity_risk }}%{% else %}Not evaluated{% endif %}</div>
                             </div>
                         </div>
                     </div>
@@ -390,23 +390,23 @@
                     <div class="metric-card">
                         <div>Concentration Risk</div>
                         <div style="font-size: 1.5em; font-weight: bold;" class="warning" id="concentrationRisk">
-                            {{ portfolio.concentration_risk | default('MEDIUM') }}
+                            {% if portfolio.concentration_risk %}{{ portfolio.concentration_risk }}{% else %}Not evaluated{% endif %}
                         </div>
-                        <div>Top 3 Holdings: {{ portfolio.top3_percent | default(45) }}%</div>
+                        <div>Top 3 Holdings: {% if portfolio.top3_percent is not none %}{{ portfolio.top3_percent }}%{% else %}Not evaluated{% endif %}</div>
                     </div>
                     <div class="metric-card">
                         <div>Diversification Score</div>
                         <div style="font-size: 1.5em; font-weight: bold;" id="diversificationScore">
-                            {{ portfolio.diversification_score | default(72) }}/100
+                            {% if portfolio.diversification_score is not none %}{{ portfolio.diversification_score }}/100{% else %}Not evaluated{% endif %}
                         </div>
                         <div>Optimal: 80+</div>
                     </div>
                     <div class="metric-card">
                         <div>Geographic Diversification</div>
                         <div style="font-size: 1.5em; font-weight: bold;" id="geoDiversification">
-                            {{ portfolio.geo_diversification | default('MODERATE') }}
+                            {% if portfolio.geo_diversification %}{{ portfolio.geo_diversification }}{% else %}Not evaluated{% endif %}
                         </div>
-                        <div>US: {{ portfolio.us_exposure | default(85) }}%</div>
+                        <div>US: {% if portfolio.us_exposure is not none %}{{ portfolio.us_exposure }}%{% else %}Not evaluated{% endif %}</div>
                     </div>
                 </div>
             </div>
@@ -431,14 +431,14 @@
                             <div class="metric-card">
                                 <div>Confidence Level</div>
                                 <div style="font-size: 1.5em; font-weight: bold;" id="confidenceLevel">
-                                    {{ portfolio.prediction_confidence | default(85) }}%
+                                    {% if portfolio.prediction_confidence is not none and portfolio.prediction_confidence != '' %}{{ portfolio.prediction_confidence }}%{% else %}Not evaluated{% endif %}
                                 </div>
                                 <div>AI Model Accuracy</div>
                             </div>
                             <div class="metric-card">
                                 <div>Expected Return</div>
                                 <div style="font-size: 1.5em; font-weight: bold;" class="positive" id="expectedReturn">
-                                    {{ "%+.2f"|format(portfolio.expected_return | default(2.5)) }}%
+                                    {% if portfolio.expected_return is not none %}{{ "%+.2f"|format(portfolio.expected_return) }}%{% else %}Not evaluated{% endif %}
                                 </div>
                                 <div>Next 30 Days</div>
                             </div>

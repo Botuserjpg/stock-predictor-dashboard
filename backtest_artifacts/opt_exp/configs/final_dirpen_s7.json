@@ -1,0 +1,1 @@
+{"lookback":20,"target":"T1","name":"final_dirpen_s7","arch":"hybrid","lr":0.0005,"loss":"huber","dropout":0.3,"rlrp_patience":6,"epochs":60,"bn":true,"batch_size":32,"units":48,"l2":0.001,"pooled":false,"clipnorm":1,"feature_set":"F1","es_patience":15,"seed":7,"dirpen":1.0}

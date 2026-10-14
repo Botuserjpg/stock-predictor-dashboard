@@ -429,27 +429,27 @@
             <div class="metrics-grid">
                 <div class="metric-card">
                     <div>Total Value</div>
-                    <div style="font-size: 2em; font-weight: bold;">${{ portfolio.total_value | default(0) | round(2) }}</div>
-                    <div class="{{ 'positive' if portfolio.daily_change >= 0 else 'negative' }}">
-                        {{ "%+.2f"|format(portfolio.daily_change | default(0)) }}%
+                    <div style="font-size: 2em; font-weight: bold;">{% if portfolio.total_value is not none %}${{ portfolio.total_value | round(2) }}{% else %}Not evaluated{% endif %}</div>
+                    <div class="{{ 'positive' if (portfolio.daily_change or 0) >= 0 else 'negative' }}">
+                        {% if portfolio.daily_change is not none %}{{ "%+.2f"|format(portfolio.daily_change) }}%{% else %}Not evaluated{% endif %}
                     </div>
                 </div>
                 <div class="metric-card">
                     <div>Cash Balance</div>
-                    <div style="font-size: 2em; font-weight: bold;">${{ portfolio.cash_balance | default(0) | round(2) }}</div>
+                    <div style="font-size: 2em; font-weight: bold;">{% if portfolio.cash_balance is not none %}${{ portfolio.cash_balance | round(2) }}{% else %}Not evaluated{% endif %}</div>
                     <div>Available to invest</div>
                 </div>
                 <div class="metric-card">
                     <div>Total Return</div>
                     <div style="font-size: 2em; font-weight: bold;" 
-                         class="{{ 'positive' if portfolio.total_return >= 0 else 'negative' }}">
-                        {{ "%+.2f"|format(portfolio.total_return | default(0)) }}%
+                         class="{{ 'positive' if (portfolio.total_return or 0) >= 0 else 'negative' }}">
+                        {% if portfolio.total_return is not none %}{{ "%+.2f"|format(portfolio.total_return) }}%{% else %}Not evaluated{% endif %}
                     </div>
                     <div>All Time</div>
                 </div>
                 <div class="metric-card">
                     <div>Holdings</div>
-                    <div style="font-size: 2em; font-weight: bold;">{{ portfolio.holdings_count | default(0) }}</div>
+                    <div style="font-size: 2em; font-weight: bold;">{% if portfolio.holdings_count is not none %}{{ portfolio.holdings_count }}{% else %}Not evaluated{% endif %}</div>
                     <div>Diversified</div>
                 </div>
             </div>

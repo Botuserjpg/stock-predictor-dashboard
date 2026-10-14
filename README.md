@@ -24,24 +24,46 @@ with a live training run.
 | Web analytics | pandas, numpy, scipy, statsmodels, scikit-learn, matplotlib, plotly, seaborn |
 | Ops | gunicorn + eventlet, APScheduler, SQLAlchemy + alembic, Docker |
 
-## Verified Results
+## Results (independent held-out audit)
 
-Leakage-audited backtest on **5 instruments** (AAPL, MSFT, TSLA,
-GOOGL, RY.TO) with a 60-day lookback, 186 strictly out-of-sample trading days per
-symbol (930 total), next-day-close horizon. This is a **fixed chronological
-70/15/15 split** (train/validation/test), not a rolling walk-forward retraining
-protocol:
+An independent audit (`backtest_ml/audit_analyze.py`) retrained the LSTM+GRU
+log-return ensemble config (`final_dirpen`: lookback 20, T1 log-return target,
+F1 features, hybrid 48-unit model, epoch 60) **fresh** on 5 instruments (AAPL,
+MSFT, TSLA, GOOGL, RY.TO) under 3 seeds (42, 7, 2026), with a fixed chronological
+70/15/15 split and the scaler fit on training rows only. It computes every metric
+from the raw `(actual, predicted)` pairs — no stored metric is trusted. **945**
+strictly out-of-sample next-day-close test points.
 
-| Metric | Value |
-|---|---|
-| RMSE | 81.69 |
-| MAPE | 22.99% |
-| Directional accuracy | 47.63% |
+| Metric | Model | Persistence (last close) |
+|---|---|---|
+| RMSE (unweighted mean over tickers) | 7.06 | 7.04 |
+| MAPE (unweighted mean) | 1.44% | 1.43% |
+| Pooled directional accuracy | 51.43% (486/945) | n/a (a last-close baseline predicts no move) |
 
-The harness (`backtest_ml/run_backtest.py`) fingerprints the source modules, splits
-chronologically (70/15/15), and refuses to scale on all rows — the test window is
-never seen during training/validation. A determinism audit (repeat runs under a
-fixed seed) produced identical metrics, confirming the results are reproducible.
+Persistence (last close) forecasts "no move", so it is reported as n/a rather
+than a score. The meaningful comparisons are vs 50% (correct null hypothesis for
+directional accuracy) and vs always-up (50.79% shared up-move days).
+
+**Honest verdict: the model does NOT beat the baselines.**
+- RMSE 7.06 vs persistence 7.04 — slightly worse.
+- MAPE 1.44% vs 1.43% — slightly worse.
+- Pooled directional accuracy 51.43% vs 50.79% always-up — marginally better,
+  but **not statistically significant** (exact binomial test vs 50%: p = 0.398;
+  Wilson 95% CI [48.2%, 54.6%]).
+- Seed spread in per-seed directional accuracy: 47.1% to 51.4% — high variance,
+  consistent with no real signal.
+
+### Reproduce the audit
+
+```powershell
+.venv310\Scripts\python.exe backtest_ml\exp_optimize.py --config backtest_artifacts\opt_exp\configs\final_dirpen_s42.json --evaluate-test
+.venv310\Scripts\python.exe backtest_ml\exp_optimize.py --config backtest_artifacts\opt_exp\configs\final_dirpen_s7.json --evaluate-test
+.venv310\Scripts\python.exe backtest_ml\exp_optimize.py --config backtest_artifacts\opt_exp\configs\final_dirpen_s2026.json --evaluate-test
+.venv310\Scripts\python.exe backtest_ml\audit_analyze.py   # writes results/audit_<date>.csv + results/audit_report.md
+```
+
+All external API keys are configured via the `.env` file (see Quick Start) —
+never hardcoded, never committed.
 
 ## Quick Start (Local)
 

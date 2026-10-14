@@ -466,12 +466,12 @@
                         <div class="metrics-grid">
                             <div class="metric-card">
                                 <div>Confidence Level</div>
-                                <div style="font-size: 1.5em; font-weight: bold;" id="confidenceLevel">85%</div>
+                                <div style="font-size: 1.5em; font-weight: bold;" id="confidenceLevel">Not evaluated</div>
                                 <div>AI Model Accuracy</div>
                             </div>
                             <div class="metric-card">
                                 <div>Expected Return</div>
-                                <div style="font-size: 1.5em; font-weight: bold;" class="positive" id="expectedReturn">+2.8%</div>
+                                <div style="font-size: 1.5em; font-weight: bold;" class="positive" id="expectedReturn">Not evaluated</div>
                                 <div>Next 30 Days</div>
                             </div>
                         </div>
@@ -1002,13 +1002,9 @@
         function updatePredictionsByHorizon(horizon) {
             // In real implementation, this would fetch new predictions for the specified horizon
             console.log(`Updating predictions for ${horizon}-day horizon`);
-            
-            // Update expected return based on horizon
-            const baseReturn = 2.8;
-            const horizonMultiplier = horizon / 30;
-            const adjustedReturn = (baseReturn * horizonMultiplier).toFixed(2);
-            
-            document.getElementById('expectedReturn').textContent = `+${adjustedReturn}%`;
+
+            // No evaluated return is available for this horizon
+            document.getElementById('expectedReturn').textContent = 'Not evaluated';
         }
 
         // Update predictions with real-time data
@@ -1016,9 +1012,13 @@
             if (predictionData) {
                 updatePredictionsChart(predictionData);
                 
-                // Update confidence metrics
-                document.getElementById('confidenceLevel').textContent = `${predictionData.confidence || 85}%`;
-                document.getElementById('expectedReturn').textContent = `${predictionData.expected_return >= 0 ? '+' : ''}${predictionData.expected_return?.toFixed(2) || '2.8'}%`;
+                // Update confidence metrics (show "Not evaluated" when absent)
+                document.getElementById('confidenceLevel').textContent =
+                    (predictionData.confidence != null) ? `${predictionData.confidence}%` : 'Not evaluated';
+                document.getElementById('expectedReturn').textContent =
+                    (predictionData.expected_return != null)
+                        ? `${predictionData.expected_return >= 0 ? '+' : ''}${predictionData.expected_return.toFixed(2)}%`
+                        : 'Not evaluated';
             }
         }
 
@@ -1087,58 +1087,27 @@
 
         // Display sample simulation results
         function displaySampleSimulationResults(investment, horizon, strategy) {
-            const baseValue = 125430;
-            const strategies = {
-                'current': { return: 2.8, probability: 75 },
-                'aggressive': { return: 4.2, probability: 65 },
-                'conservative': { return: 1.8, probability: 85 },
-                'balanced': { return: 3.1, probability: 80 }
-            };
-            
-            const strategyData = strategies[strategy];
-            const expectedValue = baseValue + (parseFloat(investment) * (1 + strategyData.return / 100));
-            const expectedReturn = strategyData.return;
-            
-            const results = {
-                expected_value: expectedValue,
-                expected_return: expectedReturn,
-                success_probability: strategyData.probability,
-                analysis: `Based on ${strategy} strategy, your portfolio shows strong potential for growth with ${strategyData.probability}% probability of achieving target returns.`
-            };
-            
-            displaySimulationResults(results);
+            document.getElementById('simulationResults').innerHTML = `
+                <div class="simulation-result">
+                    <h4>Simulation Results</h4>
+                    <p><strong>Demo data</strong> — a live simulation is unavailable right now.</p>
+                </div>
+            `;
         }
 
         // Test scenario
         function testScenario(scenario) {
-            const scenarios = {
-                'bull_market': { name: 'Bull Market', growth: 15 },
-                'bear_market': { name: 'Bear Market', growth: -15 },
-                'high_volatility': { name: 'High Volatility', growth: 0 }
-            };
-            
-            const selected = scenarios[scenario];
-            
             // Update simulation inputs for scenario testing
             document.getElementById('simInvestment').value = '0';
             document.getElementById('simHorizon').value = '90';
             document.getElementById('simStrategy').value = 'current';
             
-            // Show scenario-specific analysis
-            const analysis = {
-                'bull_market': "In a bull market scenario, your portfolio could gain +15% with technology stocks outperforming. Consider taking some profits at resistance levels.",
-                'bear_market': "In a bear market, defensive positioning is key. Your current allocation may experience -15% drawdown. Consider adding hedges.",
-                'high_volatility': "High volatility environments require careful risk management. Your portfolio may experience larger swings but also presents trading opportunities."
-            };
-            
-            const results = {
-                expected_value: 125430 * (1 + selected.growth / 100),
-                expected_return: selected.growth,
-                success_probability: scenario === 'bull_market' ? 70 : 60,
-                analysis: analysis[scenario]
-            };
-            
-            displaySimulationResults(results);
+            document.getElementById('simulationResults').innerHTML = `
+                <div class="simulation-result">
+                    <h4>Simulation Results</h4>
+                    <p><strong>Demo data</strong> — scenario modeling is unavailable right now.</p>
+                </div>
+            `;
         }
 
         // Generate report

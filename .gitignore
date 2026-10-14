@@ -23,11 +23,14 @@ runtime_state/
 audit_logs/
 stock_predictor.log
 stock_predictor_app.log
+results/*.log
+results/*.txt
 data_quality/
 model_registry/
 *.db
 
 # Generated data/model artifacts
+*.parquet
 data_cache/*
 !data_cache/demo_precomputed/
 !data_cache/demo_precomputed/**

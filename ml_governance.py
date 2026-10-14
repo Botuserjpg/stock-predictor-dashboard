@@ -79,6 +79,11 @@ def clean_market_data(data: pd.DataFrame) -> pd.DataFrame:
     numeric_cols = [c for c in ["Open", "High", "Low", "Close", "Volume"] if c in cleaned.columns]
     for col in numeric_cols:
         cleaned[col] = pd.to_numeric(cleaned[col], errors="coerce")
+    # NON-CAUSAL: .bfill() looks FORWARD in time (fills today's NaN with a future
+    # value). Safe only for live display/training of historical data already fully
+    # observed; never use this when a model must be evaluated in point-in-time
+    # (backtest) order. The backtest pipeline (run_backtest.causal_clean) forwards
+    # fills only.
     cleaned[numeric_cols] = cleaned[numeric_cols].ffill().bfill()
 
     for col in [c for c in ["Open", "High", "Low", "Close"] if c in cleaned.columns]:
@@ -86,6 +91,9 @@ def clean_market_data(data: pd.DataFrame) -> pd.DataFrame:
         extreme = returns.abs() > 0.35
         if extreme.any():
             cleaned.loc[extreme, col] = np.nan
+            # NON-CAUSAL: .bfill() looks FORWARD in time (fills with a future value).
+            # Same caveat as above: live display only, never for point-in-time/backtest
+            # evaluation, which uses forward-fill only.
             cleaned[col] = cleaned[col].ffill().bfill()
     if "Volume" in cleaned.columns:
         cleaned["Volume"] = cleaned["Volume"].clip(lower=0)
@@ -132,6 +140,10 @@ def select_features_by_correlation(data: pd.DataFrame, target: str = "Close", ma
     numeric = data.select_dtypes(include=[np.number]).replace([np.inf, -np.inf], np.nan).dropna(axis=1, how="all")
     if target not in numeric.columns:
         return [target]
+    # NON-CAUSAL: .shift(-1) looks FORWARD in time (next row's return). This is used
+    # only to rank feature correlation on fully-observed history when preparing live
+    # models. The backtest pipeline never calls this (run_backtest uses a fixed
+    # feature list), so no held-out results are affected.
     returns_target = numeric[target].pct_change().shift(-1)
     if returns_target.dropna().nunique() < 2:
         return [target]

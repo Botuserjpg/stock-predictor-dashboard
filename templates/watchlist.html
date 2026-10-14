@@ -429,22 +429,22 @@
             <div class="metrics-grid">
                 <div class="metric-card">
                     <div>Total Watched Stocks</div>
-                    <div style="font-size: 2em; font-weight: bold;" id="totalWatched">12</div>
-                    <div>Across 8 sectors</div>
+                    <div style="font-size: 2em; font-weight: bold;" id="totalWatched">Demo data</div>
+                    <div>Demo data</div>
                 </div>
                 <div class="metric-card">
                     <div>AI Buy Signals</div>
-                    <div style="font-size: 2em; font-weight: bold;" class="positive" id="buySignals">8</div>
+                    <div style="font-size: 2em; font-weight: bold;" class="positive" id="buySignals">Demo data</div>
                     <div>Strong opportunities</div>
                 </div>
                 <div class="metric-card">
                     <div>Avg Expected Return</div>
-                    <div style="font-size: 2em; font-weight: bold;" class="positive" id="avgReturn">+5.2%</div>
+                    <div style="font-size: 2em; font-weight: bold;" class="positive" id="avgReturn">Demo data</div>
                     <div>Next 30 days</div>
                 </div>
                 <div class="metric-card">
                     <div>Portfolio Overlap</div>
-                    <div style="font-size: 2em; font-weight: bold;" id="portfolioOverlap">25%</div>
+                    <div style="font-size: 2em; font-weight: bold;" id="portfolioOverlap">Demo data</div>
                     <div>Already in portfolio</div>
                 </div>
             </div>
@@ -456,11 +456,11 @@
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
                 <div>
                     <div style="font-size: 0.9em; opacity: 0.9;">Available Cash</div>
-                    <div style="font-size: 1.5em; font-weight: bold;">$15,000.00</div>
+                    <div style="font-size: 1.5em; font-weight: bold;">Demo data</div>
                 </div>
                 <div>
                     <div style="font-size: 0.9em; opacity: 0.9;">Quick Buy Budget</div>
-                    <div style="font-size: 1.5em; font-weight: bold;">$1,500.00</div>
+                    <div style="font-size: 1.5em; font-weight: bold;">Demo data</div>
                 </div>
                 <div>
                     <button class="btn btn-success" onclick="quickBuyFromWatchlist()">🛒 Quick Buy Top Pick</button>
@@ -683,7 +683,7 @@
                     sentiment: 'BULLISH',
                     ai_signal: 'STRONG_BUY',
                     ai_reason: 'Strong earnings growth and AI integration',
-                    confidence_level: 'HIGH',
+                    confidence_level: 'Demo data',
                     volume: 58200000,
                     chart_data: {
                         dates: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
@@ -702,7 +702,7 @@
                     sentiment: 'BULLISH',
                     ai_signal: 'BUY',
                     ai_reason: 'Cloud growth accelerating',
-                    confidence_level: 'HIGH',
+                    confidence_level: 'Demo data',
                     volume: 28500000,
                     chart_data: {
                         dates: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
@@ -721,7 +721,7 @@
                     sentiment: 'NEUTRAL',
                     ai_signal: 'BUY',
                     ai_reason: 'AI leadership and search dominance',
-                    confidence_level: 'MEDIUM',
+                    confidence_level: 'Demo data',
                     volume: 18200000,
                     chart_data: {
                         dates: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
@@ -740,7 +740,7 @@
                     sentiment: 'BEARISH',
                     ai_signal: 'HOLD',
                     ai_reason: 'Waiting for Q3 delivery numbers',
-                    confidence_level: 'MEDIUM',
+                    confidence_level: 'Demo data',
                     volume: 42500000,
                     chart_data: {
                         dates: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
@@ -759,7 +759,7 @@
                     sentiment: 'BULLISH',
                     ai_signal: 'BUY',
                     ai_reason: 'AWS growth and retail recovery',
-                    confidence_level: 'HIGH',
+                    confidence_level: 'Demo data',
                     volume: 38500000,
                     chart_data: {
                         dates: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
@@ -778,7 +778,7 @@
                     sentiment: 'BULLISH',
                     ai_signal: 'STRONG_BUY',
                     ai_reason: 'AI chip demand surging',
-                    confidence_level: 'HIGH',
+                    confidence_level: 'Demo data',
                     volume: 52500000,
                     chart_data: {
                         dates: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
@@ -1266,21 +1266,21 @@
                         company_name: 'Meta Platforms Inc.',
                         current_price: 285.40,
                         reason: 'Strong ad revenue growth and metaverse investments',
-                        expected_return: 12.5
+                        expected_return: 'Demo data'
                     },
                     {
                         symbol: 'JPM',
                         company_name: 'JPMorgan Chase & Co.',
                         current_price: 145.80,
                         reason: 'Interest rate benefits and strong balance sheet',
-                        expected_return: 8.2
+                        expected_return: 'Demo data'
                     },
                     {
                         symbol: 'UNH',
                         company_name: 'UnitedHealth Group Inc.',
                         current_price: 485.25,
                         reason: 'Healthcare sector stability and dividend growth',
-                        expected_return: 6.8
+                        expected_return: 'Demo data'
                     }
                 ];
                 displayAIRecommendations(sampleRecommendations);
@@ -1309,7 +1309,7 @@
                             <strong>AI Suggests Adding:</strong>
                             <div style="margin-top: 5px;">${rec.reason}</div>
                             <div style="font-size: 0.8em; margin-top: 5px; color: #6c757d;">
-                                Expected Return: ${rec.expected_return >= 0 ? '+' : ''}${rec.expected_return}%
+                                Expected Return: ${typeof rec.expected_return === 'number' ? (rec.expected_return >= 0 ? '+' : '') + rec.expected_return + '%' : (rec.expected_return || 'Not evaluated')}
                             </div>
                         </div>
                         

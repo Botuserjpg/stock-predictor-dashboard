@@ -7,6 +7,7 @@ from typing import Dict, List, Tuple, Optional, Any
 import yfinance as yf
 from sklearn.preprocessing import MinMaxScaler, RobustScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+from metrics_eval import directional_accuracy
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import LSTM, Dense, Dropout, GRU, BatchNormalization, Input, concatenate
@@ -632,14 +633,9 @@ def calculate_model_metrics(actual, predicted, model_name=""):
         mse = mean_squared_error(actual, predicted)
         rmse = np.sqrt(mse)
         
-        # Directional accuracy
-        if len(actual) > 1 and len(predicted) > 1:
-            actual_dir = np.diff(actual) > 0
-            pred_dir = np.diff(predicted) > 0
-            directional_acc = np.mean(actual_dir == pred_dir) * 100
-        else:
-            directional_acc = 50.0
-            
+        # Directional accuracy (shared definition; NaN if fewer than 2 points)
+        directional_acc, _correct, _total = directional_accuracy(predicted, actual)
+
         return {
             'MAE': float(mae), 
             'MSE': float(mse), 
@@ -648,11 +644,13 @@ def calculate_model_metrics(actual, predicted, model_name=""):
             'Model': model_name
         }
     except Exception:
+        # On failure, report NaN (Not evaluated) instead of plausible-looking
+        # placeholder numbers.
         return {
-            'MAE': 0.1, 
-            'MSE': 0.01, 
-            'RMSE': 0.1, 
-            'Directional_Accuracy': 50.0,
+            'MAE': float('nan'), 
+            'MSE': float('nan'), 
+            'RMSE': float('nan'), 
+            'Directional_Accuracy': float('nan'),
             'Model': model_name
         }
 
@@ -1254,7 +1252,11 @@ class AdvancedStockPredictor:
     def _calculate_comprehensive_metrics(self, X: np.ndarray, y: np.ndarray, dataset_type: str) -> Dict[str, float]:
         """Calculate comprehensive evaluation metrics"""
         if self.model_type == 'PROPHET':
-            return {'RMSE': 0.1, 'MAE': 0.08, 'MAPE': 8.0, 'Directional_Accuracy': 60.0}
+            # Prophet predictions are not produced as NN arrays, so no real
+            # hold-out metrics are available here. Report NaN rather than
+            # inventing plausible-looking numbers.
+            _nan = float('nan')
+            return {'RMSE': _nan, 'MAE': _nan, 'MAPE': _nan, 'Directional_Accuracy': _nan}
         
         predictions = self.model.predict(X, verbose=0).flatten()
         
@@ -1272,12 +1274,11 @@ class AdvancedStockPredictor:
         
         # Enhanced metrics
         try:
-            # Directional accuracy
-            actual_direction = np.diff(y_actual_inv) > 0
-            predicted_direction = np.diff(predictions_inv) > 0
-            if len(actual_direction) > 0:
-                directional_accuracy = np.mean(actual_direction == predicted_direction) * 100
-                metrics["Directional_Accuracy"] = float(directional_accuracy)
+            # Directional accuracy (shared definition; same window as the metrics
+            # returned above, so this overwrite is a no-op but keeps the intent
+            # explicit). NaN is reported when there is nothing to evaluate.
+            metrics["Directional_Accuracy"], _correct, _total = \
+                directional_accuracy(predictions_inv, y_actual_inv)
             
             # R-squared
             ss_res = np.sum((y_actual_inv - predictions_inv) ** 2)
@@ -2723,12 +2724,18 @@ def _get_enhanced_default_portfolio(budget: float, risk_tolerance: str) -> List[
 # ======================
 
 def compare_models(symbol: str) -> Dict[str, Any]:
-    """Compare performance of different models"""
+    """Compare performance of different models.
+
+    No held-out per-architecture benchmark exists for this project, so there is
+    no real figure to report. Metrics are explicitly marked "Not evaluated"
+    instead of displaying invented numbers.
+    """
+    not_evaluated = {'RMSE': 'Not evaluated', 'MAE': 'Not evaluated', 'Directional_Accuracy': 'Not evaluated'}
     return {
-        'LSTM': {'RMSE': 0.05, 'MAE': 0.04, 'Directional_Accuracy': 65.0},
-        'GRU': {'RMSE': 0.06, 'MAE': 0.05, 'Directional_Accuracy': 62.0},
-        'ENSEMBLE': {'RMSE': 0.045, 'MAE': 0.038, 'Directional_Accuracy': 68.0},
-        'PROPHET': {'RMSE': 0.07, 'MAE': 0.06, 'Directional_Accuracy': 58.0}
+        'LSTM': dict(not_evaluated),
+        'GRU': dict(not_evaluated),
+        'ENSEMBLE': dict(not_evaluated),
+        'PROPHET': dict(not_evaluated)
     }
 
 def compare_enhanced_models(symbol: str, periods: List[str] = None) -> Dict[str, Any]:
